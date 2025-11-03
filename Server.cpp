@@ -1,5 +1,6 @@
 #include "Server.hpp"
 #include "Client.hpp"
+#include "Command.hpp"
 
 #include <iostream>
 #include <cstring>
@@ -16,14 +17,13 @@
 #define BACKLOG 10
 #define BUFFER_SIZE 512
 
-Server::Server() : _port(0), _password(""), _serverFd(-1), _epollFd(-1) {}
+Server::Server(): _port(0), _password(""), _serverFd(-1), _epollFd(-1) {
+    _initCommands();
+}
 
-Server::Server(int port, const std::string& password):
-    _port(port),
-    _password(password),
-    _serverFd(-1),
-    _epollFd(-1)
-{}
+Server::Server(int port, const std::string& password): _port(port), _password(password), _serverFd(-1), _epollFd(-1) {
+    _initCommands();
+}
 
 Server::~Server() {
     if (_serverFd >= 0) close(_serverFd);
@@ -33,6 +33,10 @@ Server::~Server() {
         close(it->first);
         delete it->second;
     }
+}
+
+void Server::_initCommands() {
+    _commands["PASS"] = &Command::pass;
 }
 
 void Server::_initServer() {
@@ -189,7 +193,21 @@ void Server::_handleClientDisconnect(int fd) {
 }
 
 void Server::_processCommand(int fd, const std::string& commandLine) {
-    std::cout << "[Socket " << fd << "] CMD: " << commandLine << std::endl;
+    std::vector<std::string> args;
+    std::istringstream iss(commandLine);
+    std::string token;
+    while (iss >> token) {
+        args.push_back(token);
+    }
+    Client* client = _clients[fd];
+    std::string cmdName = args[0];
+    if (_commands.count(cmdName) > 0) {
+        CommandHandler func = _commands[cmdName];
+        func(*this, client, args);
+    }
+    else {
+        // client->reply(421, cmdName);
+    }
 }
 
 void Server::run() {
@@ -213,4 +231,12 @@ void Server::run() {
             }
         }
     }
+}
+
+int Server::getPort() const {
+    return _port;
+}
+
+const std::string& Server::getPassword() const {
+    return _password;
 }
