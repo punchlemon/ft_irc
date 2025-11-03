@@ -60,6 +60,13 @@ bool Client::isAuthenticated() const {
     return _isAuthenticated;
 }
 
+std::string Client::getPrefix() const {
+    if (_nickname.empty()) {
+        return "*";
+    }
+    return _nickname + "!" + (_username.empty() ? "*" : _username) + "@" + _hostname;
+}
+
 const std::string& Client::getRecvBuffer() const {
     return _recvBuffer;
 }
@@ -70,13 +77,6 @@ const std::string& Client::getSendBuffer() const {
 
 bool Client::hasMode(char mode) const {
     return _modes.count(mode) > 0;
-}
-
-std::string Client::getPrefix() const {
-    if (_nickname.empty()) {
-        return "*";
-    }
-    return _nickname + "!" + (_username.empty() ? "*" : _username) + "@" + _hostname;
 }
 
 void Client::setNickname(const std::string& nickname) {
