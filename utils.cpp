@@ -32,8 +32,8 @@ static int parse_and_validate_port(const std::string& portStr) {
 }
 
 static void validate_password(const std::string& password) {
-    if (password.length() < 1 || password.length() > 32) {
-        throw std::invalid_argument("Password must be 1 to 32 characters long");
+    if (password.length() < 8 || password.length() > 64) {
+        throw std::invalid_argument("Password must be 8 to 64 characters long");
     }
     for (size_t i = 0; i < password.length(); ++i) {
         unsigned char ch = static_cast<unsigned char>(password[i]);
