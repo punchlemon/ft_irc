@@ -1,0 +1,7 @@
+obj
+*.o
+*.log
+.git
+*.swp
+build
+__pycache__

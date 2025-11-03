@@ -1,0 +1,11 @@
+version: '3.8'
+services:
+  irc:
+    build: .
+    image: ft_irc:latest
+    container_name: ft_irc_service
+    ports:
+      - "6667:6667"
+    # default command can be overridden; this starts server on 6667 with password 'password'
+    command: ["/usr/src/app/ircserv", "6667", "password"]
+    tty: true
