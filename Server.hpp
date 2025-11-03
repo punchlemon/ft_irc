@@ -1,4 +1,5 @@
 #pragma once
+#include "CommandHandler.hpp"
 #include <vector>
 #include <map>
 #include <string>
@@ -13,6 +14,8 @@ public:
     ~Server();
 
     void run();
+    int getPort() const;
+    const std::string& getPassword() const;
 
 private:
     Server(const Server& other);
@@ -24,7 +27,9 @@ private:
     int _epollFd;
     std::vector<struct epoll_event> _events;
     std::map<int, Client*> _clients;
+    std::map<std::string, CommandHandler> _commands;
 
+    void _initCommands();
     void _initServer();
     void _handleNewConnection();
     void _handleClientData(int fd);
