@@ -17,6 +17,7 @@ void Command::pass(Server& server, Client* client, const std::vector<std::string
     if (password == server.getPassword()) {
         client->setAuthenticated(true);
         std::cout << "[Socket " << client->getFd() << "] Authentication successful." << std::endl;
+        client->queueMessages("Authenticated!\r\n");
     } else {
         // client->reply(464, ""); // ERR_PASSWDMISMATCH
         std::cout << "[Socket " << client->getFd() << "] Authentication failed: incorrect password." << std::endl;

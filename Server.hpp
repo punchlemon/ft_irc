@@ -16,6 +16,8 @@ public:
     void run();
     int getPort() const;
     const std::string& getPassword() const;
+    void enableEpollOut(int fd);
+    void disableEpollOut(int fd);
 
 private:
     Server(const Server& other);
@@ -32,7 +34,8 @@ private:
     void _initCommands();
     void _initServer();
     void _handleNewConnection();
-    void _handleClientData(int fd);
+    void _handleClientRecv(int fd);
+    void _handleClientSend(int fd);
     void _handleClientDisconnect(int fd);
     void _processCommand(int fd, const std::string& commandLine);
 };

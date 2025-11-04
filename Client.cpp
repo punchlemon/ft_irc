@@ -1,10 +1,10 @@
 #include "Client.hpp"
+#include "Server.hpp"
 #include <unistd.h>
+#include <iostream>
 
-Client::Client() : _fd(-1), _isAuthenticated(false) {}
-
-Client::Client(int fd, const std::string& hostname)
-    : _fd(fd), _hostname(hostname), _isAuthenticated(false) {
+Client::Client(int fd, const std::string& hostname, Server* server, uint32_t epollEvents)
+    : _fd(fd), _hostname(hostname), _isAuthenticated(false), _server(server), _epollEvents(epollEvents) {
 }
 
 Client::Client(const Client& other)
@@ -60,6 +60,13 @@ bool Client::isAuthenticated() const {
     return _isAuthenticated;
 }
 
+std::string Client::getPrefix() const {
+    if (_nickname.empty()) {
+        return "*";
+    }
+    return _nickname + "!" + (_username.empty() ? "*" : _username) + "@" + _hostname;
+}
+
 const std::string& Client::getRecvBuffer() const {
     return _recvBuffer;
 }
@@ -68,15 +75,17 @@ const std::string& Client::getSendBuffer() const {
     return _sendBuffer;
 }
 
-bool Client::hasMode(char mode) const {
-    return _modes.count(mode) > 0;
+uint32_t Client::getEpollEvents() const {
+    return _epollEvents;
 }
 
-std::string Client::getPrefix() const {
-    if (_nickname.empty()) {
-        return "*";
-    }
-    return _nickname + "!" + (_username.empty() ? "*" : _username) + "@" + _hostname;
+void Client::queueMessages(const std::string& message) {
+    _sendBuffer += message;
+    _server->enableEpollOut(_fd);
+}
+
+bool Client::hasMode(char mode) const {
+    return _modes.count(mode) > 0;
 }
 
 void Client::setNickname(const std::string& nickname) {
@@ -113,6 +122,10 @@ void Client::clearSendBuffer(size_t len) {
     } else {
         _sendBuffer.erase(0, len);
     }
+}
+
+void Client::setEpollEvents(uint32_t events) {
+    _epollEvents = events;
 }
 
 void Client::addMode(char mode) {
