@@ -109,7 +109,7 @@ void Server::_handleNewConnection() {
         std::string hostname = inet_ntoa(client_addr.sin_addr);
         std::cout << "[Socket " << new_socket << "] New connection from " << hostname << std::endl;
 
-        Client* new_client = new Client(new_socket, hostname);
+        Client* new_client = new Client(new_socket, hostname, this, EPOLLIN);
         _clients[new_socket] = new_client;
 
         struct epoll_event ev;
@@ -140,7 +140,7 @@ std::string visualizeCRLF(const std::string& input) {
     return oss.str();
 }
 
-void Server::_handleClientData(int fd) {
+void Server::_handleClientRecv(int fd) {
     std::cout << "[Socket " << fd << "] Handling client data" << std::endl;
     if (!_clients.count(fd)) return;
     Client* client = _clients[fd];
@@ -164,18 +164,30 @@ void Server::_handleClientData(int fd) {
         }
         client->appendRecvBuffer(read_buf, bytes_read);
     }
+}
 
-    while (true) {
-        const std::string& buf = client->getRecvBuffer();
-        // std::cout << "[Socket " << fd << "] Processing command line : ["
-        //         << visualizeCRLF(buf) << "]" << std::endl;
-        size_t crlf_pos = buf.find("\r\n");
-        if (crlf_pos == std::string::npos) break;
-        std::string command_line = buf.substr(0, crlf_pos);
-        client->clearRecvBuffer(crlf_pos + 2);
-        if (!command_line.empty()) {
-            _processCommand(fd, command_line);
+void Server::_handleClientSend(int fd) {
+    if (!_clients.count(fd)) return;
+    Client* client = _clients[fd];
+
+    const std::string& send_buf = client->getSendBuffer();
+    if (send_buf.empty()) {
+        this->disableEpollOut(fd);
+        return;
+    }
+    ssize_t bytes_sent = send(fd, send_buf.c_str(), send_buf.length(), 0);
+    if (bytes_sent < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            return;
         }
+        std::cerr << "[Socket " << fd << "] send error" << std::endl;
+        _handleClientDisconnect(fd);
+        return;
+    }
+    client->clearSendBuffer(bytes_sent);
+
+    if (client->getSendBuffer().empty()) {
+        this->disableEpollOut(fd);
     }
 }
 
@@ -212,23 +224,53 @@ void Server::_processCommand(int fd, const std::string& commandLine) {
 
 void Server::run() {
     _initServer();
+    const int EPOLL_TIMEOUT_MS = 1000; // 1 second timeout to avoid indefinite blocking
     while (true) {
-        int n = epoll_wait(_epollFd, _events.data(), _events.size(), -1);
+        int n = epoll_wait(_epollFd, _events.data(), _events.size(), EPOLL_TIMEOUT_MS);
         if (n < 0) {
-            if (errno == EINTR) continue;
-            std::cerr << "epoll_wait error" << std::endl;
-            break;
+            if (errno == EINTR) continue; // interrupted by signal, retry
+            std::cerr << "epoll_wait error: " << std::strerror(errno) << std::endl;
+            continue;
+        }
+        if (n == 0) {
+            continue;
         }
 
         for (int i = 0; i < n; ++i) {
             int fd = _events[i].data.fd;
-            if (_events[i].events & EPOLLIN) {
-                if (fd == _serverFd) {
-                    _handleNewConnection();
-                } else {
-                    _handleClientData(fd);
+            uint32_t events = _events[i].events;
+            if (fd == _serverFd && (events & EPOLLIN)) {
+                _handleNewConnection();
+                continue;
+            }
+            if (events & (EPOLLHUP | EPOLLERR)) {
+                _handleClientDisconnect(fd);
+                continue;
+            }
+            if (events & EPOLLIN) {
+                _handleClientRecv(fd);
+            }
+            if (events & EPOLLOUT) {
+                _handleClientSend(fd);
+            }
+
+
+            if (!_clients.count(fd)) continue;
+            Client* client = _clients[fd];
+            while (true) {
+                const std::string& buf = client->getRecvBuffer();
+                // std::cout << "[Socket " << fd << "] Processing command line : ["
+                //         << visualizeCRLF(buf) << "]" << std::endl;
+                size_t crlf_pos = buf.find("\r\n");
+                if (crlf_pos == std::string::npos) break;
+                std::string command_line = buf.substr(0, crlf_pos);
+                client->clearRecvBuffer(crlf_pos + 2);
+                if (!command_line.empty()) {
+                    _processCommand(fd, command_line);
                 }
             }
+
+
         }
     }
 }
@@ -239,4 +281,35 @@ int Server::getPort() const {
 
 const std::string& Server::getPassword() const {
     return _password;
+}
+
+void Server::enableEpollOut(int fd) {
+    if (!_clients.count(fd)) return;
+    Client* client = _clients[fd];
+
+    uint32_t events = client->getEpollEvents();
+    if (!(events & EPOLLOUT)) {
+        uint32_t new_events = events | EPOLLOUT;
+        struct epoll_event ev;
+        ev.events = new_events;
+        ev.data.fd = fd;
+        if (epoll_ctl(_epollFd, EPOLL_CTL_MOD, fd, &ev) == 0) {
+            client->setEpollEvents(new_events);
+        }
+    }
+}
+
+void Server::disableEpollOut(int fd) {
+    if (!_clients.count(fd)) return;
+    Client* client = _clients[fd];
+    uint32_t events = client->getEpollEvents();
+    if (events & EPOLLOUT) {
+        uint32_t new_events = events & ~EPOLLOUT;
+        struct epoll_event ev;
+        ev.events = new_events;
+        ev.data.fd = fd;
+        if (epoll_ctl(_epollFd, EPOLL_CTL_MOD, fd, &ev) == 0) {
+            client->setEpollEvents(new_events);
+        }
+    }
 }

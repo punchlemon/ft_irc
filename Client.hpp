@@ -2,6 +2,9 @@
 #include <string>
 #include <set>
 #include <sys/types.h>
+#include <stdint.h>
+
+class Server;
 
 class Client {
 private:
@@ -13,12 +16,15 @@ private:
     std::string _hostname;
     bool _isAuthenticated;
     std::set<char> _modes;
+    Server* _server;
+    uint32_t _epollEvents;
 
-public:
     Client();
-    explicit Client(int fd, const std::string& hostname);
     Client(const Client& other);
     Client& operator=(const Client& other);
+
+public:
+    explicit Client(int fd, const std::string& hostname, Server* server, uint32_t epollEvents);
     ~Client();
 
     void swap(Client& other);
@@ -33,6 +39,10 @@ public:
     const std::string& getRecvBuffer() const;
     const std::string& getSendBuffer() const;
 
+    uint32_t getEpollEvents() const;
+
+    void queueMessages(const std::string& message);
+
     void setNickname(const std::string& nickname);
     void setUsername(const std::string& username);
     void setAuthenticated(bool val);
@@ -41,6 +51,8 @@ public:
     void clearRecvBuffer(size_t len);
     void appendSendBuffer(const char* buf, ssize_t len);
     void clearSendBuffer(size_t len);
+
+    void setEpollEvents(uint32_t events);
 
     void addMode(char mode);
     void removeMode(char mode);
