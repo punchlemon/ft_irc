@@ -1,6 +1,7 @@
 #include "Server.hpp"
 #include "Client.hpp"
-#include "Command.hpp"
+#include "ICommand.hpp"
+#include "RegistrationCommand.hpp"
 
 #include <iostream>
 #include <cstring>
@@ -25,6 +26,8 @@ Server::Server(int port, const std::string& password): _serverName("ft_irc"), _p
 }
 
 Server::~Server() {
+    _cleanupCommands();
+
     if (_serverFd >= 0) close(_serverFd);
     if (_epollFd >= 0) close(_epollFd);
 
@@ -35,7 +38,16 @@ Server::~Server() {
 }
 
 void Server::_initCommands() {
-    _commands["PASS"] = &Command::pass;
+    _commands["PASS"] = new RegistrationCommand(RegistrationCommand::PASS);
+    _commands["NICK"] = new RegistrationCommand(RegistrationCommand::NICK);
+    _commands["USER"] = new RegistrationCommand(RegistrationCommand::USER);
+}
+
+void Server::_cleanupCommands() {
+    for (std::map<std::string, ICommand*>::iterator it = _commands.begin(); it != _commands.end(); ++it) {
+        delete it->second;
+    }
+    _commands.clear();
 }
 
 void Server::_initServer() {
@@ -210,14 +222,32 @@ void Server::_processCommand(int fd, const std::string& commandLine) {
     while (iss >> token) {
         args.push_back(token);
     }
+
+    if (args.empty()) {
+        std::cerr << "[Socket " << fd << "] Empty command received" << std::endl;
+        return;
+    }
+
+    if (!_clients.count(fd)) {
+        std::cerr << "[Socket " << fd << "] Client not found in _processCommand" << std::endl;
+        return;
+    }
+
     Client* client = _clients[fd];
     std::string cmdName = args[0];
+
+    // Convert command to uppercase for case-insensitive matching
+    for (size_t i = 0; i < cmdName.length(); ++i) {
+        cmdName[i] = std::toupper(cmdName[i]);
+    }
+
     if (_commands.count(cmdName) > 0) {
-        CommandHandler func = _commands[cmdName];
-        func(*this, client, args);
+        ICommand* cmd = _commands[cmdName];
+        cmd->execute(*this, client, args);
     }
     else {
-        // client->reply(421, cmdName);
+        std::cout << "[Socket " << fd << "] Unknown command: " << cmdName << std::endl;
+        // client->reply(421, cmdName); // ERR_UNKNOWNCOMMAND
     }
 }
 
