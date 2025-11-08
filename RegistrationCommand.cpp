@@ -31,7 +31,7 @@ std::string RegistrationCommand::getName() const {
 }
 
 void RegistrationCommand::executePass(Server& server, Client* client, const std::vector<std::string>& args) {
-    if (args.size() < 2) {
+    if (args.size() != 2) {
         client->reply(461, "PASS"); // ERR_NEEDMOREPARAMS
         std::cout << "[Socket " << client->getFd() << "] PASS: insufficient parameters" << std::endl;
         return;
