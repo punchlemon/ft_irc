@@ -80,7 +80,7 @@ uint32_t Client::getEpollEvents() const {
     return _epollEvents;
 }
 
-void Client::queueMessages(const std::string& message) {
+void Client::queueMessage(const std::string& message) {
     _sendBuffer += message;
     _server->enableEpollOut(_fd);
 }
@@ -110,7 +110,7 @@ void Client::reply(int replyCode, const std::string& message) {
             break;
     }
     replyMsg += "\r\n";
-    queueMessages(replyMsg);
+    queueMessage(replyMsg);
 }
 
 bool Client::hasMode(char mode) const {
