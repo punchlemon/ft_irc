@@ -2,6 +2,7 @@
 #include "Server.hpp"
 #include <unistd.h>
 #include <iostream>
+#include <sstream>
 
 Client::Client(int fd, const std::string& hostname, Server* server, uint32_t epollEvents)
     : _fd(fd), _hostname(hostname), _isAuthenticated(false), _server(server), _epollEvents(epollEvents) {
@@ -82,6 +83,34 @@ uint32_t Client::getEpollEvents() const {
 void Client::queueMessages(const std::string& message) {
     _sendBuffer += message;
     _server->enableEpollOut(_fd);
+}
+
+void Client::reply(int replyCode, const std::string& message) {
+    std::ostringstream oss;
+    oss << replyCode;
+    std::string replyCodeStr = oss.str();
+    if (replyCodeStr.length() < 3) {
+        replyCodeStr = std::string(3 - replyCodeStr.length(), '0') + replyCodeStr;
+    }
+    std::string replyMsg = ":" + _server->getServerName() + " " + replyCodeStr + " " + getPrefix() + " " + message + " ";
+    switch (replyCode) {
+        case 401: // ERR_NOSUCHNICK
+        case 402: // ERR_NOSUCHSERVER
+        case 403: // ERR_NOSUCHCHANNEL
+        case 404: // ERR_CANNOTSENDTOCHAN
+        case 431: // ERR_NONICKNAMEGIVEN
+        case 432: // ERR_ERRONEUSNICKNAME
+        case 433: // ERR_NICKNAMEINUSE
+        case 461: // ERR_NEEDMOREPARAMS
+            replyMsg += ":No enough parameters";
+        case 462: // ERR_ALREADYREGISTERED
+        case 464: // ERR_PASSWDMISMATCH
+            break;
+        default:
+            break;
+    }
+    replyMsg += "\r\n";
+    queueMessages(replyMsg);
 }
 
 bool Client::hasMode(char mode) const {

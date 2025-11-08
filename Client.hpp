@@ -42,6 +42,7 @@ public:
     uint32_t getEpollEvents() const;
 
     void queueMessages(const std::string& message);
+    void reply(int replyCode, const std::string& message);
 
     void setNickname(const std::string& nickname);
     void setUsername(const std::string& username);
