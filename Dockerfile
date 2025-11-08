@@ -2,13 +2,18 @@ FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install build tools
+# Install build tools and ngircd for testing
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-       build-essential \
-       g++ \
-       make \
-    && rm -rf /var/lib/apt/lists/*
+        && apt-get install -y --no-install-recommends \
+             build-essential \
+             g++ \
+             make \
+             ngircd \
+             vim \
+        && rm -rf /var/lib/apt/lists/*
+
+# Ensure ngircd has the configured password (idempotent)
+RUN sed -i 's/^[[:space:]]*;Password = .*/        Password = password/' /etc/ngircd/ngircd.conf
 
 WORKDIR /usr/src/app
 
