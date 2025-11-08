@@ -13,15 +13,14 @@
 #include <fcntl.h>
 #include <sys/epoll.h>
 #include <sstream>
+#include <signal.h>
+
+extern volatile sig_atomic_t g_shutdown_requested;
 
 #define BACKLOG 10
 #define BUFFER_SIZE 512
 
-Server::Server(): _port(0), _password(""), _serverFd(-1), _epollFd(-1) {
-    _initCommands();
-}
-
-Server::Server(int port, const std::string& password): _port(port), _password(password), _serverFd(-1), _epollFd(-1) {
+Server::Server(int port, const std::string& password): _serverName("ft_irc"), _port(port), _password(password), _serverFd(-1), _epollFd(-1) {
     _initCommands();
 }
 
@@ -226,6 +225,13 @@ void Server::run() {
     _initServer();
     const int EPOLL_TIMEOUT_MS = 1000; // 1 second timeout to avoid indefinite blocking
     while (true) {
+        // Check for shutdown signal
+        if (g_shutdown_requested) {
+            std::cout << "\nShutdown signal received, cleaning up..." << std::endl;
+            shutdown();
+            break;
+        }
+
         int n = epoll_wait(_epollFd, _events.data(), _events.size(), EPOLL_TIMEOUT_MS);
         if (n < 0) {
             if (errno == EINTR) continue; // interrupted by signal, retry
@@ -312,4 +318,46 @@ void Server::disableEpollOut(int fd) {
             client->setEpollEvents(new_events);
         }
     }
+}
+
+std::string Server::getServerName() const {
+    return _serverName;
+}
+
+void Server::shutdown() {
+    std::cout << "Starting graceful shutdown..." << std::endl;
+
+    // 1. Stop accepting new connections - close server socket first
+    if (_serverFd >= 0) {
+        std::cout << "Closing server socket (fd=" << _serverFd << ")" << std::endl;
+        close(_serverFd);
+        _serverFd = -1;
+    }
+
+    // 2. Notify all clients about shutdown and close their connections
+    std::cout << "Disconnecting " << _clients.size() << " client(s)..." << std::endl;
+    for (std::map<int, Client*>::iterator it = _clients.begin(); it != _clients.end(); ++it) {
+        int client_fd = it->first;
+        Client* client = it->second;
+
+        // Send shutdown message (optional but polite)
+        const char* shutdown_msg = "ERROR :Server is shutting down\r\n";
+        send(client_fd, shutdown_msg, strlen(shutdown_msg), 0);
+
+        // Close client socket
+        close(client_fd);
+
+        // Free client memory
+        delete client;
+    }
+    _clients.clear();
+
+    // 3. Close epoll instance
+    if (_epollFd >= 0) {
+        std::cout << "Closing epoll instance (fd=" << _epollFd << ")" << std::endl;
+        close(_epollFd);
+        _epollFd = -1;
+    }
+
+    std::cout << "Graceful shutdown complete." << std::endl;
 }

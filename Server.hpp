@@ -9,7 +9,6 @@ class Client;
 
 class Server {
 public:
-    Server();
     Server(int port, const std::string& password);
     ~Server();
 
@@ -18,11 +17,15 @@ public:
     const std::string& getPassword() const;
     void enableEpollOut(int fd);
     void disableEpollOut(int fd);
+    std::string getServerName() const;
+    void shutdown();
 
 private:
+    Server();
     Server(const Server& other);
     Server& operator=(const Server& other);
 
+    std::string _serverName;
     int _port;
     std::string _password;
     int _serverFd;
