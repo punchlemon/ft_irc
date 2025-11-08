@@ -92,7 +92,7 @@ void Client::reply(int replyCode, const std::string& message) {
     if (replyCodeStr.length() < 3) {
         replyCodeStr = std::string(3 - replyCodeStr.length(), '0') + replyCodeStr;
     }
-    std::string replyMsg = ":" + _server->getServerName() + " " + replyCodeStr + " " + getPrefix() + " " + message + " ";
+    std::string replyMsg = ":" + _server->getServerName() + " " + replyCodeStr + " " + getPrefix() + " " + message + " :";
     switch (replyCode) {
         case 401: // ERR_NOSUCHNICK
         case 402: // ERR_NOSUCHSERVER
@@ -102,7 +102,7 @@ void Client::reply(int replyCode, const std::string& message) {
         case 432: // ERR_ERRONEUSNICKNAME
         case 433: // ERR_NICKNAMEINUSE
         case 461: // ERR_NEEDMOREPARAMS
-            replyMsg += ":No enough parameters";
+            replyMsg += "Syntax error";
         case 462: // ERR_ALREADYREGISTERED
         case 464: // ERR_PASSWDMISMATCH
             break;
