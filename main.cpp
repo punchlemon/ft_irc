@@ -4,8 +4,18 @@
 #include <cstdlib>
 #include <signal.h>
 
+// Global flag for graceful shutdown
+volatile sig_atomic_t g_shutdown_requested = 0;
+
+void signalHandler(int signum) {
+    (void)signum;
+    g_shutdown_requested = 1;
+}
+
 void setupSignalHandlers() {
     signal(SIGPIPE, SIG_IGN);
+    signal(SIGINT, signalHandler);
+    signal(SIGTERM, signalHandler);
 }
 
 int main(const int argc, const char **argv) {
