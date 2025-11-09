@@ -11,10 +11,12 @@ private:
     int _fd;
     std::string _recvBuffer;
     std::string _sendBuffer;
+    std::string _password;
     std::string _nickname;
     std::string _username;
+    std::string _realname;
     std::string _hostname;
-    bool _isAuthenticated;
+    bool _hasRegistered;
     std::set<char> _modes;
     Server* _server;
     uint32_t _epollEvents;
@@ -27,12 +29,13 @@ public:
     explicit Client(int fd, const std::string& hostname, Server* server, uint32_t epollEvents);
     ~Client();
 
-    void swap(Client& other);
     int getFd() const;
+    const std::string& getPassword() const;
     const std::string& getNickname() const;
     const std::string& getUsername() const;
     const std::string& getHostname() const;
-    bool isAuthenticated() const;
+    const std::string& getRealname() const;
+    bool hasRegistered() const;
     bool hasMode(char mode) const;
     std::string getPrefix() const;
 
@@ -41,12 +44,14 @@ public:
 
     uint32_t getEpollEvents() const;
 
-    void queueMessages(const std::string& message);
+    void queueMessage(const std::string& message);
     void reply(int replyCode, const std::string& message);
 
+    void setPassword(const std::string& password);
     void setNickname(const std::string& nickname);
     void setUsername(const std::string& username);
-    void setAuthenticated(bool val);
+    void setRealname(const std::string& realname);
+    void setHasRegistered(bool val);
 
     void appendRecvBuffer(const char* buf, ssize_t len);
     void clearRecvBuffer(size_t len);

@@ -4,45 +4,27 @@
 #include <iostream>
 #include <sstream>
 
-Client::Client(int fd, const std::string& hostname, Server* server, uint32_t epollEvents)
-    : _fd(fd), _hostname(hostname), _isAuthenticated(false), _server(server), _epollEvents(epollEvents) {
-}
-
-Client::Client(const Client& other)
-    : _fd(other._fd),
-      _recvBuffer(other._recvBuffer),
-      _sendBuffer(other._sendBuffer),
-      _nickname(other._nickname),
-      _username(other._username),
-      _hostname(other._hostname),
-      _isAuthenticated(other._isAuthenticated),
-      _modes(other._modes) {
-}
-
-Client& Client::operator=(const Client& other) {
-    if (this == &other) {
-        return *this;
-    }
-    Client temp(other);
-    this->swap(temp);
-    return *this;
-}
+Client::Client(int fd, const std::string& hostname, Server* server, uint32_t epollEvents):
+    _fd(fd),
+    _recvBuffer(""),
+    _sendBuffer(""),
+    _password(""),
+    _nickname(""),
+    _username(""),
+    _hostname(hostname),
+    _hasRegistered(false),
+    _server(server),
+    _epollEvents(epollEvents)
+{}
 
 Client::~Client() {}
 
-void Client::swap(Client& other) {
-    std::swap(_fd, other._fd);
-    std::swap(_isAuthenticated, other._isAuthenticated);
-    _recvBuffer.swap(other._recvBuffer);
-    _sendBuffer.swap(other._sendBuffer);
-    _nickname.swap(other._nickname);
-    _username.swap(other._username);
-    _hostname.swap(other._hostname);
-    _modes.swap(other._modes);
-}
-
 int Client::getFd() const {
     return _fd;
+}
+
+const std::string& Client::getPassword() const {
+    return _password;
 }
 
 const std::string& Client::getNickname() const {
@@ -53,12 +35,16 @@ const std::string& Client::getUsername() const {
     return _username;
 }
 
+const std::string& Client::getRealname() const {
+    return _realname;
+}
+
 const std::string& Client::getHostname() const {
     return _hostname;
 }
 
-bool Client::isAuthenticated() const {
-    return _isAuthenticated;
+bool Client::hasRegistered() const {
+    return _hasRegistered;
 }
 
 std::string Client::getPrefix() const {
@@ -80,7 +66,7 @@ uint32_t Client::getEpollEvents() const {
     return _epollEvents;
 }
 
-void Client::queueMessages(const std::string& message) {
+void Client::queueMessage(const std::string& message) {
     _sendBuffer += message;
     _server->enableEpollOut(_fd);
 }
@@ -92,7 +78,7 @@ void Client::reply(int replyCode, const std::string& message) {
     if (replyCodeStr.length() < 3) {
         replyCodeStr = std::string(3 - replyCodeStr.length(), '0') + replyCodeStr;
     }
-    std::string replyMsg = ":" + _server->getServerName() + " " + replyCodeStr + " " + getPrefix() + " " + message + " ";
+    std::string replyMsg = ":" + _server->getServerName() + " " + replyCodeStr + " " + getPrefix() + " " + message + " :";
     switch (replyCode) {
         case 401: // ERR_NOSUCHNICK
         case 402: // ERR_NOSUCHSERVER
@@ -101,20 +87,30 @@ void Client::reply(int replyCode, const std::string& message) {
         case 431: // ERR_NONICKNAMEGIVEN
         case 432: // ERR_ERRONEUSNICKNAME
         case 433: // ERR_NICKNAMEINUSE
+        case 451: // ERR_NOTREGISTERED
+            replyMsg = "Connection not registered";
+            break;
         case 461: // ERR_NEEDMOREPARAMS
-            replyMsg += ":No enough parameters";
+            replyMsg = "Syntax error";
+            break;
         case 462: // ERR_ALREADYREGISTERED
+            replyMsg = "Connection already registered";
+            break;
         case 464: // ERR_PASSWDMISMATCH
             break;
         default:
             break;
     }
     replyMsg += "\r\n";
-    queueMessages(replyMsg);
+    queueMessage(replyMsg);
 }
 
 bool Client::hasMode(char mode) const {
     return _modes.count(mode) > 0;
+}
+
+void Client::setPassword(const std::string& password) {
+    _password = password;
 }
 
 void Client::setNickname(const std::string& nickname) {
@@ -125,8 +121,12 @@ void Client::setUsername(const std::string& username) {
     _username = username;
 }
 
-void Client::setAuthenticated(bool val) {
-    _isAuthenticated = val;
+void Client::setRealname(const std::string& realname) {
+    _realname = realname;
+}
+
+void Client::setHasRegistered(bool val) {
+    _hasRegistered = val;
 }
 
 void Client::appendRecvBuffer(const char* buf, ssize_t len) {
