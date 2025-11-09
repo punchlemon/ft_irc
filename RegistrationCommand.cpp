@@ -31,76 +31,52 @@ std::string RegistrationCommand::getName() const {
 }
 
 void RegistrationCommand::executePass(Server& server, Client* client, const std::vector<std::string>& args) {
+    (void)server; // unused for now
+
+    if (client->getPassword().empty() || client->getNickname().empty() || client->getUsername().empty()) {
+        client->reply(462, ""); // ERR_ALREADYREGISTERED
+        return;
+    }
+
     if (args.size() != 2) {
         client->reply(461, "PASS"); // ERR_NEEDMOREPARAMS
-        std::cout << "[Socket " << client->getFd() << "] PASS: insufficient parameters" << std::endl;
         return;
     }
 
-    if (client->isAuthenticated()) {
-        client->reply(462, ""); // ERR_ALREADYREGISTERED
-        std::cout << "[Socket " << client->getFd() << "] PASS: already authenticated" << std::endl;
-        return;
-    }
-
-    const std::string& password = args[1];
-    if (password == server.getPassword()) {
-        client->setAuthenticated(true);
-        std::cout << "[Socket " << client->getFd() << "] PASS: authentication successful" << std::endl;
-        client->queueMessage("PASS accepted\r\n");
-    } else {
-        client->reply(464, ""); // ERR_PASSWDMISMATCH
-        std::cout << "[Socket " << client->getFd() << "] PASS: incorrect password" << std::endl;
-    }
+    client->setPassword(args[1]);
+    client->setPassword(true);
 }
 
 void RegistrationCommand::executeNick(Server& server, Client* client, const std::vector<std::string>& args) {
     (void)server; // unused for now
 
-    if (args.size() < 2) {
-        client->reply(431, ""); // ERR_NONICKNAMEGIVEN
-        std::cout << "[Socket " << client->getFd() << "] NICK: no nickname given" << std::endl;
+    if (args.size() != 2) {
+        client->reply(461, "NICK"); // ERR_NONICKNAMEGIVEN
         return;
     }
 
-    const std::string& nickname = args[1];
-
-    std::string oldNick = client->getNickname();
-    client->setNickname(nickname);
-
-    std::cout << "[Socket " << client->getFd() << "] NICK: changed from '"
-              << oldNick << "' to '" << nickname << "'" << std::endl;
-
-    if (!oldNick.empty()) {
-        std::string msg = ":" + oldNick + " NICK :" + nickname + "\r\n";
-        client->queueMessage(msg);
-    }
+    client->setNickname(args[1]);
+    client->setNick(true);
 }
 
 void RegistrationCommand::executeUser(Server& server, Client* client, const std::vector<std::string>& args) {
     (void)server; // unused for now
 
-    if (args.size() < 5) {
-        client->reply(461, "USER"); // ERR_NEEDMOREPARAMS
-        std::cout << "[Socket " << client->getFd() << "] USER: insufficient parameters" << std::endl;
-        return;
-    }
-
-    if (!client->getUsername().empty()) {
+    if (client->hasRegistered()) {
         client->reply(462, ""); // ERR_ALREADYREGISTERED
-        std::cout << "[Socket " << client->getFd() << "] USER: already registered" << std::endl;
         return;
     }
 
-    const std::string& username = args[1];
-
-    std::string realname = args[4];
-    for (size_t i = 5; i < args.size(); ++i) {
-        realname += " " + args[i];
+    if (args.size() != 5) {
+        client->reply(461, "USER"); // ERR_NEEDMOREPARAMS
+        return;
     }
 
-    client->setUsername(username);
+    if (client->getUsername().empty()) {
+        client->reply(451, ""); // ERR_NOTREGISTERED
+    }
 
-    std::cout << "[Socket " << client->getFd() << "] USER: username='" << username
-              << "' realname='" << realname << "'" << std::endl;
+    client->setUsername(args[1]);
+    client->setRealname(args[4]);
+    client->setUser(true);
 }
