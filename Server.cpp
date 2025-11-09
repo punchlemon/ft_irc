@@ -21,7 +21,14 @@ extern volatile sig_atomic_t g_shutdown_requested;
 #define BACKLOG 10
 #define BUFFER_SIZE 512
 
-Server::Server(int port, const std::string& password): _serverName("ft_irc"), _port(port), _password(password), _serverFd(-1), _epollFd(-1) {
+Server::Server(int port, const std::string& password):
+    _serverName("ft_irc"),
+    _port(port),
+    _password(password),
+    _serverFd(-1),
+    _epollFd(-1),
+    _startTimeString(_generateTimeString(time(NULL)))
+{
     _initCommands();
 }
 
@@ -38,16 +45,16 @@ Server::~Server() {
 }
 
 void Server::_initCommands() {
-    _commands["PASS"] = new RegistrationCommand(RegistrationCommand::PASS);
-    _commands["NICK"] = new RegistrationCommand(RegistrationCommand::NICK);
-    _commands["USER"] = new RegistrationCommand(RegistrationCommand::USER);
+    _registerCommands["PASS"] = new RegistrationCommand(RegistrationCommand::PASS);
+    _registerCommands["NICK"] = new RegistrationCommand(RegistrationCommand::NICK);
+    _registerCommands["USER"] = new RegistrationCommand(RegistrationCommand::USER);
 }
 
 void Server::_cleanupCommands() {
-    for (std::map<std::string, ICommand*>::iterator it = _commands.begin(); it != _commands.end(); ++it) {
+    for (std::map<std::string, RegistrationCommand*>::iterator it = _registerCommands.begin(); it != _registerCommands.end(); ++it) {
         delete it->second;
     }
-    _commands.clear();
+    _registerCommands.clear();
 }
 
 void Server::_initServer() {
@@ -94,6 +101,16 @@ void Server::_initServer() {
     _events.resize(1024);
 
     std::cout << "Server started on port " << _port << std::endl;
+}
+
+const std::string Server::_generateTimeString(time_t startTime) const {
+    struct tm* timeinfo = gmtime(&startTime);
+    char buffer[80];
+    memset(buffer, 0, sizeof(buffer));
+    const char* format = "%a %b %d %Y at %T (UTC)";
+    strftime(buffer, sizeof(buffer), format, timeinfo);
+
+    return std::string(buffer);
 }
 
 void Server::_handleNewConnection() {
@@ -241,11 +258,30 @@ void Server::_processCommand(int fd, const std::string& commandLine) {
         cmdName[i] = std::toupper(cmdName[i]);
     }
 
-    if (_commands.count(cmdName) > 0) {
-        ICommand* cmd = _commands[cmdName];
-        cmd->execute(*this, client, args);
+    if (!client->hasRegistered()) {
+        if (_registerCommands.count(cmdName) > 0) {
+            RegistrationCommand* cmd = _registerCommands[cmdName];
+            cmd->execute(*this, client, args);
+        }
+        if (!client->getPassword().empty() && !client->getNickname().empty() && !client->getUsername().empty()) {
+            if (client->getPassword() != this->getPassword()) {
+                client->queueMessage("ERROR :Access denied: Bad password?\r\n"); //// これを送信してからdisconnectする
+                std::cout << "[Socket " << fd << "] Client provided wrong password: " << client->getPrefix() << std::endl;
+                _handleClientDisconnect(fd);
+                return;
+            }
+            client->setHasRegistered(true);
+            std::cout << "[Socket " << fd << "] Client registered: " << client->getPrefix() << std::endl;
+            client->reply(001, "");
+            client->reply(002, "");
+            client->reply(003, "");
+        }
     }
     else {
+        if (_registerCommands.count(cmdName) > 0) {
+            ICommand* cmd = _registerCommands[cmdName];
+            cmd->execute(*this, client, args);
+        }
         std::cout << "[Socket " << fd << "] Unknown command: " << cmdName << std::endl;
         // client->reply(421, cmdName); // ERR_UNKNOWNCOMMAND
     }
@@ -350,8 +386,12 @@ void Server::disableEpollOut(int fd) {
     }
 }
 
-std::string Server::getServerName() const {
+const std::string Server::getServerName() const {
     return _serverName;
+}
+
+const std::string Server::getStartTimeString() const {
+    return _startTimeString;
 }
 
 void Server::shutdown() {

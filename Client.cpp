@@ -51,7 +51,7 @@ std::string Client::getPrefix() const {
     if (_nickname.empty()) {
         return "*";
     }
-    return _nickname + "!" + (_username.empty() ? "*" : _username) + "@" + _hostname;
+    return _nickname + "!" + (_username.empty() ? "*" : "~" +  _username) + "@" + _hostname;
 }
 
 const std::string& Client::getRecvBuffer() const {
@@ -78,8 +78,22 @@ void Client::reply(int replyCode, const std::string& message) {
     if (replyCodeStr.length() < 3) {
         replyCodeStr = std::string(3 - replyCodeStr.length(), '0') + replyCodeStr;
     }
-    std::string replyMsg = ":" + _server->getServerName() + " " + replyCodeStr + " " + getPrefix() + " " + message + " :";
+    std::string nickname = _nickname.empty() ? "*" : _nickname;
+    std::string msg;
+    if (!msg.empty()) {
+        msg = message + " ";
+    }
+    std::string replyMsg = ":" + _server->getServerName() + " " + replyCodeStr + " " + nickname + " " + message + ":";
     switch (replyCode) {
+        case 001: // RPL_WELCOME
+            replyMsg += "Welcome to the Internet Relay Server " + getPrefix();
+            break;
+        case 002:
+            replyMsg += "Your host is " + _server->getServerName();
+            break;
+        case 003:
+            replyMsg += "This server has been started " + _server->getStartTimeString();
+            break;
         case 401: // ERR_NOSUCHNICK
         case 402: // ERR_NOSUCHSERVER
         case 403: // ERR_NOSUCHCHANNEL
@@ -88,13 +102,13 @@ void Client::reply(int replyCode, const std::string& message) {
         case 432: // ERR_ERRONEUSNICKNAME
         case 433: // ERR_NICKNAMEINUSE
         case 451: // ERR_NOTREGISTERED
-            replyMsg = "Connection not registered";
+            replyMsg += "Connection not registered";
             break;
         case 461: // ERR_NEEDMOREPARAMS
-            replyMsg = "Syntax error";
+            replyMsg += "Syntax error";
             break;
         case 462: // ERR_ALREADYREGISTERED
-            replyMsg = "Connection already registered";
+            replyMsg += "Connection already registered";
             break;
         case 464: // ERR_PASSWDMISMATCH
             break;
