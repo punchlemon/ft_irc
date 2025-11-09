@@ -14,6 +14,7 @@ private:
     std::string _password;
     std::string _nickname;
     std::string _username;
+    std::string _realname;
     std::string _hostname;
     bool _hasRegistered;
     std::set<char> _modes;
@@ -28,12 +29,12 @@ public:
     explicit Client(int fd, const std::string& hostname, Server* server, uint32_t epollEvents);
     ~Client();
 
-    void swap(Client& other);
     int getFd() const;
     const std::string& getPassword() const;
     const std::string& getNickname() const;
     const std::string& getUsername() const;
     const std::string& getHostname() const;
+    const std::string& getRealname() const;
     bool hasRegistered() const;
     bool hasMode(char mode) const;
     std::string getPrefix() const;
@@ -49,6 +50,7 @@ public:
     void setPassword(const std::string& password);
     void setNickname(const std::string& nickname);
     void setUsername(const std::string& username);
+    void setRealname(const std::string& realname);
     void setHasRegistered(bool val);
 
     void appendRecvBuffer(const char* buf, ssize_t len);

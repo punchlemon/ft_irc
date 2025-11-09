@@ -17,38 +17,7 @@ Client::Client(int fd, const std::string& hostname, Server* server, uint32_t epo
     _epollEvents(epollEvents)
 {}
 
-Client::Client(const Client& other)
-    : _fd(other._fd),
-      _recvBuffer(other._recvBuffer),
-      _sendBuffer(other._sendBuffer),
-      _nickname(other._nickname),
-      _username(other._username),
-      _hostname(other._hostname),
-      _isAuthenticated(other._isAuthenticated),
-      _modes(other._modes) {
-}
-
-Client& Client::operator=(const Client& other) {
-    if (this == &other) {
-        return *this;
-    }
-    Client temp(other);
-    this->swap(temp);
-    return *this;
-}
-
 Client::~Client() {}
-
-void Client::swap(Client& other) {
-    std::swap(_fd, other._fd);
-    std::swap(_isAuthenticated, other._isAuthenticated);
-    _recvBuffer.swap(other._recvBuffer);
-    _sendBuffer.swap(other._sendBuffer);
-    _nickname.swap(other._nickname);
-    _username.swap(other._username);
-    _hostname.swap(other._hostname);
-    _modes.swap(other._modes);
-}
 
 int Client::getFd() const {
     return _fd;
@@ -64,6 +33,10 @@ const std::string& Client::getNickname() const {
 
 const std::string& Client::getUsername() const {
     return _username;
+}
+
+const std::string& Client::getRealname() const {
+    return _realname;
 }
 
 const std::string& Client::getHostname() const {
@@ -146,6 +119,10 @@ void Client::setNickname(const std::string& nickname) {
 
 void Client::setUsername(const std::string& username) {
     _username = username;
+}
+
+void Client::setRealname(const std::string& realname) {
+    _realname = realname;
 }
 
 void Client::setHasRegistered(bool val) {

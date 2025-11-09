@@ -33,7 +33,7 @@ std::string RegistrationCommand::getName() const {
 void RegistrationCommand::executePass(Server& server, Client* client, const std::vector<std::string>& args) {
     (void)server; // unused for now
 
-    if (client->getPassword().empty() || client->getNickname().empty() || client->getUsername().empty()) {
+    if (!client->getPassword().empty() || !client->getNickname().empty() || !client->getUsername().empty()) {
         client->reply(462, ""); // ERR_ALREADYREGISTERED
         return;
     }
@@ -44,7 +44,6 @@ void RegistrationCommand::executePass(Server& server, Client* client, const std:
     }
 
     client->setPassword(args[1]);
-    client->setPassword(true);
 }
 
 void RegistrationCommand::executeNick(Server& server, Client* client, const std::vector<std::string>& args) {
@@ -56,7 +55,6 @@ void RegistrationCommand::executeNick(Server& server, Client* client, const std:
     }
 
     client->setNickname(args[1]);
-    client->setNick(true);
 }
 
 void RegistrationCommand::executeUser(Server& server, Client* client, const std::vector<std::string>& args) {
@@ -72,11 +70,10 @@ void RegistrationCommand::executeUser(Server& server, Client* client, const std:
         return;
     }
 
-    if (client->getUsername().empty()) {
+    if (!client->getUsername().empty()) {
         client->reply(451, ""); // ERR_NOTREGISTERED
     }
 
     client->setUsername(args[1]);
     client->setRealname(args[4]);
-    client->setUser(true);
 }
