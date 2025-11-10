@@ -3,7 +3,6 @@
 #include <map>
 #include <string>
 #include <sys/epoll.h>
-#include "RegistrationCommand.hpp"
 
 class Client;
 class ICommand;
@@ -35,7 +34,7 @@ private:
     std::string _startTimeString;
     std::vector<struct epoll_event> _events;
     std::map<int, Client*> _clients;
-    std::map<std::string, RegistrationCommand*> _registerCommands;
+    std::map<std::string, ICommand*> _commands;
 
     void _initCommands();
     void _cleanupCommands();

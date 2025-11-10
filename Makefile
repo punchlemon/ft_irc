@@ -11,7 +11,9 @@ SRCS = \
 	Server.cpp \
 	Client.cpp \
 	Channel.cpp \
-	RegistrationCommand.cpp
+	PassCommand.cpp \
+	NickCommand.cpp \
+	UserCommand.cpp
 OBJDIR = obj
 OBJS = $(addprefix $(OBJDIR)/, $(SRCS:.cpp=.o))
 

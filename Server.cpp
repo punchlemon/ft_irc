@@ -1,7 +1,9 @@
 #include "Server.hpp"
 #include "Client.hpp"
 #include "ICommand.hpp"
-#include "RegistrationCommand.hpp"
+#include "PassCommand.hpp"
+#include "NickCommand.hpp"
+#include "UserCommand.hpp"
 
 #include <iostream>
 #include <cstring>
@@ -45,16 +47,16 @@ Server::~Server() {
 }
 
 void Server::_initCommands() {
-    _registerCommands["PASS"] = new RegistrationCommand(RegistrationCommand::PASS);
-    _registerCommands["NICK"] = new RegistrationCommand(RegistrationCommand::NICK);
-    _registerCommands["USER"] = new RegistrationCommand(RegistrationCommand::USER);
+    _commands["PASS"] = new PassCommand();
+    _commands["NICK"] = new NickCommand();
+    _commands["USER"] = new UserCommand();
 }
 
 void Server::_cleanupCommands() {
-    for (std::map<std::string, RegistrationCommand*>::iterator it = _registerCommands.begin(); it != _registerCommands.end(); ++it) {
+    for (std::map<std::string, ICommand*>::iterator it = _commands.begin(); it != _commands.end(); ++it) {
         delete it->second;
     }
-    _registerCommands.clear();
+    _commands.clear();
 }
 
 void Server::_initServer() {
@@ -253,17 +255,28 @@ void Server::_processCommand(int fd, const std::string& commandLine) {
     Client* client = _clients[fd];
     std::string cmdName = args[0];
 
-    // Convert command to uppercase for case-insensitive matching
     for (size_t i = 0; i < cmdName.length(); ++i) {
         cmdName[i] = std::toupper(cmdName[i]);
     }
 
-    if (!client->hasRegistered()) {
-        if (_registerCommands.count(cmdName) > 0) {
-            RegistrationCommand* cmd = _registerCommands[cmdName];
-            cmd->execute(*this, client, args);
+    if (_commands.count(cmdName) == 0) {
+        std::cout << "[Socket " << fd << "] Unknown command: " << args[0] << std::endl;
+        if (client->hasRegistered()) {
+            client->reply(421, args[0]);
         }
-        if (!client->getPassword().empty() && !client->getNickname().empty() && !client->getUsername().empty()) {
+        return;
+    }
+
+    ICommand* cmd = _commands[cmdName];
+
+    if (!client->hasRegistered()) {
+        if (cmd->requiresRegistration()) {
+            client->reply(451, "");
+            return;
+        }
+        cmd->execute(*this, client, args);
+        ///// これはいつか関数化して綺麗にする
+        if (!client->hasRegistered() && !client->getNickname().empty() && !client->getUsername().empty()) {
             if (client->getPassword() != this->getPassword()) {
                 client->queueMessage("ERROR :Access denied: Bad password?\r\n"); //// これを送信してからdisconnectする
                 std::cout << "[Socket " << fd << "] Client provided wrong password: " << client->getPrefix() << std::endl;
@@ -276,14 +289,10 @@ void Server::_processCommand(int fd, const std::string& commandLine) {
             client->reply(002, "");
             client->reply(003, "");
         }
+        ////////////////////////////////
     }
     else {
-        if (_registerCommands.count(cmdName) > 0) {
-            ICommand* cmd = _registerCommands[cmdName];
-            cmd->execute(*this, client, args);
-        }
-        std::cout << "[Socket " << fd << "] Unknown command: " << cmdName << std::endl;
-        // client->reply(421, cmdName); // ERR_UNKNOWNCOMMAND
+        cmd->execute(*this, client, args);
     }
 }
 

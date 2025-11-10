@@ -80,10 +80,10 @@ void Client::reply(int replyCode, const std::string& message) {
     }
     std::string nickname = _nickname.empty() ? "*" : _nickname;
     std::string msg;
-    if (!msg.empty()) {
+    if (!message.empty()) {
         msg = message + " ";
     }
-    std::string replyMsg = ":" + _server->getServerName() + " " + replyCodeStr + " " + nickname + " " + message + ":";
+    std::string replyMsg = ":" + _server->getServerName() + " " + replyCodeStr + " " + nickname + " " + msg + ":";
     switch (replyCode) {
         case 001: // RPL_WELCOME
             replyMsg += "Welcome to the Internet Relay Server " + getPrefix();
@@ -98,6 +98,9 @@ void Client::reply(int replyCode, const std::string& message) {
         case 402: // ERR_NOSUCHSERVER
         case 403: // ERR_NOSUCHCHANNEL
         case 404: // ERR_CANNOTSENDTOCHAN
+        case 421: // ERR_UNKNOWNCOMMAND
+            replyMsg += "Unknown command";
+            break;
         case 431: // ERR_NONICKNAMEGIVEN
         case 432: // ERR_ERRONEUSNICKNAME
         case 433: // ERR_NICKNAMEINUSE
