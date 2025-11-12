@@ -3,10 +3,10 @@
 #include <map>
 #include <string>
 #include <sys/epoll.h>
-#include "RegistrationCommand.hpp"
 
 class Client;
 class ICommand;
+class Channel;
 
 class Server {
 public:
@@ -22,6 +22,17 @@ public:
     const std::string getStartTimeString() const;
     void shutdown();
 
+    // Channel management (basic operations)
+    Channel* getChannel(const std::string& channelName);
+    Channel* getOrCreateChannel(const std::string& channelName);
+    void removeChannel(const std::string& channelName);
+    Client* getClientByFd(int fd);
+
+    // Client-Channel operations (high-level helpers)
+    void addClientToChannel(Client* client, Channel* channel);
+    void removeClientFromChannel(Client* client, Channel* channel);
+    void removeClientFromAllChannels(Client* client);
+
 private:
     Server();
     Server(const Server& other);
@@ -35,7 +46,8 @@ private:
     std::string _startTimeString;
     std::vector<struct epoll_event> _events;
     std::map<int, Client*> _clients;
-    std::map<std::string, RegistrationCommand*> _registerCommands;
+    std::map<std::string, ICommand*> _commands;
+    std::map<std::string, Channel*> _channels;
 
     void _initCommands();
     void _cleanupCommands();

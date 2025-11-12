@@ -1,7 +1,11 @@
 #include "Server.hpp"
 #include "Client.hpp"
+#include "Channel.hpp"
 #include "ICommand.hpp"
-#include "RegistrationCommand.hpp"
+#include "PassCommand.hpp"
+#include "NickCommand.hpp"
+#include "UserCommand.hpp"
+#include "JoinCommand.hpp"
 
 #include <iostream>
 #include <cstring>
@@ -42,19 +46,24 @@ Server::~Server() {
         close(it->first);
         delete it->second;
     }
+
+    for (std::map<std::string, Channel*>::iterator it = _channels.begin(); it != _channels.end(); ++it) {
+        delete it->second;
+    }
 }
 
 void Server::_initCommands() {
-    _registerCommands["PASS"] = new RegistrationCommand(RegistrationCommand::PASS);
-    _registerCommands["NICK"] = new RegistrationCommand(RegistrationCommand::NICK);
-    _registerCommands["USER"] = new RegistrationCommand(RegistrationCommand::USER);
+    _commands["PASS"] = new PassCommand();
+    _commands["NICK"] = new NickCommand();
+    _commands["USER"] = new UserCommand();
+    _commands["JOIN"] = new JoinCommand();
 }
 
 void Server::_cleanupCommands() {
-    for (std::map<std::string, RegistrationCommand*>::iterator it = _registerCommands.begin(); it != _registerCommands.end(); ++it) {
+    for (std::map<std::string, ICommand*>::iterator it = _commands.begin(); it != _commands.end(); ++it) {
         delete it->second;
     }
-    _registerCommands.clear();
+    _commands.clear();
 }
 
 void Server::_initServer() {
@@ -220,11 +229,17 @@ void Server::_handleClientSend(int fd) {
 }
 
 void Server::_handleClientDisconnect(int fd) {
+    if (_clients.count(fd)) {
+        Client* client = _clients[fd];
+        removeClientFromAllChannels(client);
+    }
+
     if (_epollFd >= 0) {
         if (epoll_ctl(_epollFd, EPOLL_CTL_DEL, fd, NULL) < 0) {
             std::cerr << "epoll_ctl del failed for fd " << fd << std::endl;
         }
     }
+
     close(fd);
     if (_clients.count(fd)) {
         delete _clients[fd];
@@ -253,17 +268,28 @@ void Server::_processCommand(int fd, const std::string& commandLine) {
     Client* client = _clients[fd];
     std::string cmdName = args[0];
 
-    // Convert command to uppercase for case-insensitive matching
     for (size_t i = 0; i < cmdName.length(); ++i) {
         cmdName[i] = std::toupper(cmdName[i]);
     }
 
-    if (!client->hasRegistered()) {
-        if (_registerCommands.count(cmdName) > 0) {
-            RegistrationCommand* cmd = _registerCommands[cmdName];
-            cmd->execute(*this, client, args);
+    if (_commands.count(cmdName) == 0) {
+        std::cout << "[Socket " << fd << "] Unknown command: " << args[0] << std::endl;
+        if (client->hasRegistered()) {
+            client->reply(421, args[0]);
         }
-        if (!client->getPassword().empty() && !client->getNickname().empty() && !client->getUsername().empty()) {
+        return;
+    }
+
+    ICommand* cmd = _commands[cmdName];
+
+    if (!client->hasRegistered()) {
+        if (cmd->requiresRegistration()) {
+            client->reply(451, "");
+            return;
+        }
+        cmd->execute(*this, client, args);
+        ///// これはいつか関数化して綺麗にする
+        if (!client->hasRegistered() && !client->getNickname().empty() && !client->getUsername().empty()) {
             if (client->getPassword() != this->getPassword()) {
                 client->queueMessage("ERROR :Access denied: Bad password?\r\n"); //// これを送信してからdisconnectする
                 std::cout << "[Socket " << fd << "] Client provided wrong password: " << client->getPrefix() << std::endl;
@@ -276,14 +302,10 @@ void Server::_processCommand(int fd, const std::string& commandLine) {
             client->reply(002, "");
             client->reply(003, "");
         }
+        ////////////////////////////////
     }
     else {
-        if (_registerCommands.count(cmdName) > 0) {
-            ICommand* cmd = _registerCommands[cmdName];
-            cmd->execute(*this, client, args);
-        }
-        std::cout << "[Socket " << fd << "] Unknown command: " << cmdName << std::endl;
-        // client->reply(421, cmdName); // ERR_UNKNOWNCOMMAND
+        cmd->execute(*this, client, args);
     }
 }
 
@@ -430,4 +452,105 @@ void Server::shutdown() {
     }
 
     std::cout << "Graceful shutdown complete." << std::endl;
+}
+
+Channel* Server::getChannel(const std::string& channelName) {
+    std::map<std::string, Channel*>::iterator it = _channels.find(channelName);
+    if (it != _channels.end()) {
+        return it->second;
+    }
+    return NULL;
+}
+
+Channel* Server::getOrCreateChannel(const std::string& channelName) {
+    std::map<std::string, Channel*>::iterator it = _channels.find(channelName);
+    if (it != _channels.end()) {
+        return it->second;
+    }
+
+    // Create new channel
+    Channel* newChannel = new Channel(channelName);
+    _channels[channelName] = newChannel;
+    std::cout << "Created new channel: " << channelName << std::endl;
+    return newChannel;
+}
+
+void Server::removeChannel(const std::string& channelName) {
+    std::map<std::string, Channel*>::iterator it = _channels.find(channelName);
+    if (it == _channels.end()) {
+        return;
+    }
+    Channel* channel = it->second;
+    const std::map<int, Client*>& members = channel->getMembers();
+    std::vector<Client*> membersCopy;
+    for (std::map<int, Client*>::const_iterator mit = members.begin();
+         mit != members.end(); ++mit) {
+        if (mit->second) {
+            membersCopy.push_back(mit->second);
+        }
+    }
+
+    for (std::vector<Client*>::iterator cit = membersCopy.begin();
+         cit != membersCopy.end(); ++cit) {
+        Client* client = *cit;
+        if (client) {
+            client->removeChannel(channel);
+        }
+    }
+
+    delete channel;
+    _channels.erase(it);
+    std::cout << "Removed channel: " << channelName << std::endl;
+}
+
+Client* Server::getClientByFd(int fd) {
+    std::map<int, Client*>::iterator it = _clients.find(fd);
+    if (it != _clients.end()) {
+        return it->second;
+    }
+    return NULL;
+}
+
+void Server::addClientToChannel(Client* client, Channel* channel) {
+    if (!client || !channel) return;
+
+    channel->addClient(client);
+    client->addChannel(channel);
+
+    std::cout << "[" << client->getNickname() << "] joined channel " << channel->getName() << std::endl;
+}
+
+void Server::removeClientFromChannel(Client* client, Channel* channel) {
+    if (!client || !channel) return;
+
+    const std::string& channelName = channel->getName();
+
+    channel->removeClient(client);
+    client->removeChannel(channel);
+
+    std::cout << "[" << client->getNickname() << "] left channel " << channelName << std::endl;
+
+    if (channel->getMemberCount() == 0) {
+        removeChannel(channelName);
+    }
+}
+
+void Server::removeClientFromAllChannels(Client* client) {
+    if (!client) return;
+
+    const std::set<Channel*>& joinedChannels = client->getJoinedChannels();
+
+    std::set<Channel*> channelsCopy = joinedChannels;
+
+    for (std::set<Channel*>::iterator it = channelsCopy.begin();
+         it != channelsCopy.end(); ++it) {
+        Channel* channel = *it;
+        if (channel) {
+            // Broadcast QUIT message to channel members before removing
+            std::string quitMsg = ":" + client->getPrefix() + " QUIT :Client disconnected\r\n";
+            channel->broadcast(quitMsg, client->getFd());
+
+            removeClientFromChannel(client, channel);
+        }
+    }
 }

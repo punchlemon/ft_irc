@@ -10,6 +10,8 @@ class ICommand {
 public:
     virtual ~ICommand() {}
 
+    virtual bool requiresRegistration() const = 0;
+
     virtual void execute(Server& server, Client* client, const std::vector<std::string>& args) = 0;
 
 protected:
