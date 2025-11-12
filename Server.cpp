@@ -11,6 +11,7 @@
 #include "PartCommand.hpp"
 #include "KickCommand.hpp"
 #include "TopicCommand.hpp"
+#include "PrivmsgCommand.hpp"
 
 #include <iostream>
 #include <cstring>
@@ -67,6 +68,7 @@ void Server::_initCommands() {
     _commands["PART"] = new PartCommand();
     _commands["KICK"] = new KickCommand();
     _commands["TOPIC"] = new TopicCommand();
+    _commands["PRIVMSG"] = new PrivmsgCommand();
 }
 
 void Server::_cleanupCommands() {
