@@ -99,7 +99,7 @@ bool JoinCommand::_isValidChannelName(const std::string& name) const {
     }
     for (size_t i = 1; i < name.length(); ++i) {
         char c = name[i];
-        if (c == ' ' || c == ',' || c == '\r' || c == '\n' || c == '\0' || c == 7 || c != ':') {
+        if (c == ' ' || c == ',' || c == '\r' || c == '\n' || c == '\0' || c == '\a' || c == ':') {
             return false;
         }
     }
