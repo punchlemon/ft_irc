@@ -28,6 +28,10 @@ const std::string& Client::getPassword() const {
 }
 
 const std::string& Client::getNickname() const {
+    if (_nickname.empty()) {
+        static const std::string emptyNick = "*";
+        return emptyNick;
+    }
     return _nickname;
 }
 
@@ -78,12 +82,11 @@ void Client::reply(int replyCode, const std::string& message) {
     if (replyCodeStr.length() < 3) {
         replyCodeStr = std::string(3 - replyCodeStr.length(), '0') + replyCodeStr;
     }
-    std::string nickname = _nickname.empty() ? "*" : _nickname;
     std::string msg;
     if (!message.empty()) {
         msg = " " + message;
     }
-    std::string replyMsg = ":" + _server->getServerName() + " " + replyCodeStr + " " + nickname + msg;
+    std::string replyMsg = ":" + _server->getServerName() + " " + replyCodeStr + " " + getNickname() + msg;
     switch (replyCode) {
         case 001: // RPL_WELCOME
             replyMsg += " :Welcome to the Internet Relay Server " + getPrefix();

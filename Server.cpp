@@ -7,6 +7,7 @@
 #include "UserCommand.hpp"
 #include "JoinCommand.hpp"
 #include "ModeCommand.hpp"
+#include "InviteCommand.hpp"
 
 #include <iostream>
 #include <cstring>
@@ -59,6 +60,7 @@ void Server::_initCommands() {
     _commands["USER"] = new UserCommand();
     _commands["JOIN"] = new JoinCommand();
     _commands["MODE"] = new ModeCommand();
+    _commands["INVITE"] = new InviteCommand();
 }
 
 void Server::_cleanupCommands() {
@@ -509,6 +511,15 @@ Client* Server::getClientByFd(int fd) {
     std::map<int, Client*>::iterator it = _clients.find(fd);
     if (it != _clients.end()) {
         return it->second;
+    }
+    return NULL;
+}
+
+Client* Server::getClientByNickname(const std::string& nickname) {
+    for (std::map<int, Client*>::iterator it = _clients.begin(); it != _clients.end(); ++it) {
+        if (it->second && it->second->getNickname() == nickname) {
+            return it->second;
+        }
     }
     return NULL;
 }

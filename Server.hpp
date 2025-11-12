@@ -27,6 +27,7 @@ public:
     Channel* getOrCreateChannel(const std::string& channelName);
     void removeChannel(const std::string& channelName);
     Client* getClientByFd(int fd);
+    Client* getClientByNickname(const std::string& nickname);
 
     // Client-Channel operations (high-level helpers)
     void addClientToChannel(Client* client, Channel* channel);

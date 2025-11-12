@@ -15,7 +15,8 @@ SRCS = \
 	NickCommand.cpp \
 	UserCommand.cpp \
 	JoinCommand.cpp \
-	ModeCommand.cpp
+	ModeCommand.cpp \
+	InviteCommand.cpp
 OBJDIR = obj
 OBJS = $(addprefix $(OBJDIR)/, $(SRCS:.cpp=.o))
 
