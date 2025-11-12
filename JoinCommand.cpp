@@ -76,10 +76,8 @@ void JoinCommand::_joinSingleChannel(Server& server, Client* client, const std::
     channel->broadcastToAll(joinMsg);
 
     if (!channel->getTopic().empty()) {
-        // RPL_TOPIC
         client->reply(332, channelName + " :" + channel->getTopic());
-        // RPL_TOPICWHOTIME (optional - shows who set topic and when)
-        // For now, we'll skip this as it requires timestamp tracking
+        client->reply(333, channelName + " " + channel->getTopicSetter() + " " + channel->getCreationTimeString());
     }
 
     // Send NAMES list

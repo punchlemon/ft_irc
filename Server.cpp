@@ -10,6 +10,7 @@
 #include "InviteCommand.hpp"
 #include "PartCommand.hpp"
 #include "KickCommand.hpp"
+#include "TopicCommand.hpp"
 
 #include <iostream>
 #include <cstring>
@@ -65,6 +66,7 @@ void Server::_initCommands() {
     _commands["INVITE"] = new InviteCommand();
     _commands["PART"] = new PartCommand();
     _commands["KICK"] = new KickCommand();
+    _commands["TOPIC"] = new TopicCommand();
 }
 
 void Server::_cleanupCommands() {
