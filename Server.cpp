@@ -6,6 +6,7 @@
 #include "NickCommand.hpp"
 #include "UserCommand.hpp"
 #include "JoinCommand.hpp"
+#include "ModeCommand.hpp"
 
 #include <iostream>
 #include <cstring>
@@ -57,6 +58,7 @@ void Server::_initCommands() {
     _commands["NICK"] = new NickCommand();
     _commands["USER"] = new UserCommand();
     _commands["JOIN"] = new JoinCommand();
+    _commands["MODE"] = new ModeCommand();
 }
 
 void Server::_cleanupCommands() {

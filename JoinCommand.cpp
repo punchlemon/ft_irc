@@ -2,6 +2,7 @@
 #include "Server.hpp"
 #include "Client.hpp"
 #include "Channel.hpp"
+#include "utils.hpp"
 #include <sstream>
 
 JoinCommand::JoinCommand() {}
@@ -46,7 +47,7 @@ void JoinCommand::execute(Server& server, Client* client, const std::vector<std:
 }
 
 void JoinCommand::_joinSingleChannel(Server& server, Client* client, const std::string& channelName, const std::string& key) {
-    if (!_isValidChannelName(channelName)) {
+    if (!isValidChannelName(channelName)) {
         client->reply(403, channelName);
         return;
     }
@@ -88,20 +89,4 @@ void JoinCommand::_joinSingleChannel(Server& server, Client* client, const std::
 
     // RPL_ENDOFNAMES
     client->reply(366, channelName + " :End of /NAMES list");
-}
-
-bool JoinCommand::_isValidChannelName(const std::string& name) const {
-    if (name.empty() || name.length() > 50) {
-        return false;
-    }
-    if (name[0] != '#' && name[0] != '&') { // !+ は非対応
-        return false;
-    }
-    for (size_t i = 1; i < name.length(); ++i) {
-        char c = name[i];
-        if (c == ' ' || c == ',' || c == '\r' || c == '\n' || c == '\0' || c == '\a' || c == ':') {
-            return false;
-        }
-    }
-    return true;
 }

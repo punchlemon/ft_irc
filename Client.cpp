@@ -94,18 +94,9 @@ void Client::reply(int replyCode, const std::string& message) {
         case 003:
             replyMsg += " :This server has been started " + _server->getStartTimeString();
             break;
-        case 401: // ERR_NOSUCHNICK
-        case 402: // ERR_NOSUCHSERVER
-        case 403: // ERR_NOSUCHCHANNEL
-            replyMsg += " :No such channel";
-            break;
-        case 404: // ERR_CANNOTSENDTOCHAN
         case 421: // ERR_UNKNOWNCOMMAND
             replyMsg += " :Unknown command";
             break;
-        case 431: // ERR_NONICKNAMEGIVEN
-        case 432: // ERR_ERRONEUSNICKNAME
-        case 433: // ERR_NICKNAMEINUSE
         case 451: // ERR_NOTREGISTERED
             replyMsg += " :Connection not registered";
             break;
@@ -115,8 +106,6 @@ void Client::reply(int replyCode, const std::string& message) {
         case 462: // ERR_ALREADYREGISTERED
             replyMsg += " :Connection already registered";
             break;
-        case 464: // ERR_PASSWDMISMATCH
-            break;
         case 471: // ERR_CHANNELISFULL
             replyMsg += " :Cannot join channel (+l) -- Channel is full, try later";
             break;
@@ -125,8 +114,6 @@ void Client::reply(int replyCode, const std::string& message) {
             break;
         case 475: // ERR_BADCHANNELKEY
             replyMsg += " :Cannot join channel (+k) -- Wrong channel key";
-            break;
-        default:
             break;
     }
     replyMsg += "\r\n";

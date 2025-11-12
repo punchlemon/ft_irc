@@ -56,3 +56,19 @@ std::pair<int, std::string> validateInput(const int& argc, const char**& argv) {
 
     return std::make_pair(port, password);
 }
+
+bool isValidChannelName(const std::string& name) {
+    if (name.empty() || name.length() > 50) {
+        return false;
+    }
+    if (name[0] != '#' && name[0] != '&') {
+        return false;
+    }
+    for (size_t i = 1; i < name.length(); ++i) {
+        char c = name[i];
+        if (c == ' ' || c == ',' || c == '\r' || c == '\n' || c == '\0' || c == '\a' || c == ':') {
+            return false;
+        }
+    }
+    return true;
+}

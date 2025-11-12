@@ -2,9 +2,10 @@
 #include "Client.hpp"
 #include <sstream>
 #include <algorithm>
+#include <cstring>
 
 Channel::Channel(const std::string& name)
-    : _name(name), _topic(""), _topicSetter(""), _key(""), _userLimit(0) {
+    : _name(name), _topic(""), _topicSetter(""), _key(""), _userLimit(0), _createdAt(time(NULL)) {
 }
 
 Channel::~Channel() {
@@ -238,4 +239,10 @@ std::string Channel::getMemberListString() const {
 
 const std::map<int, Client*>& Channel::getMembers() const {
     return _members;
+}
+
+const std::string Channel::getCreationTimeString() const {
+    std::ostringstream oss;
+    oss << static_cast<long>(_createdAt);
+    return oss.str();
 }

@@ -3,6 +3,7 @@
 #include <map>
 #include <set>
 #include <vector>
+#include <ctime>
 
 class Client;
 
@@ -63,6 +64,8 @@ public:
 
     const std::map<int, Client*>& getMembers() const;
 
+    const std::string getCreationTimeString() const;
+
 private:
     Channel();
     Channel(const Channel& other);
@@ -73,6 +76,7 @@ private:
     std::string _topicSetter;
     std::string _key;
     size_t _userLimit;
+    time_t _createdAt;
 
     std::set<char> _modes;
     std::map<int, Client*> _members;
