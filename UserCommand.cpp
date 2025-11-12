@@ -7,14 +7,14 @@ UserCommand::UserCommand() {}
 UserCommand::~UserCommand() {}
 
 bool UserCommand::requiresRegistration() const {
-    return false;  // USER is used during registration
+    return false;
 }
 
 void UserCommand::execute(Server& server, Client* client, const std::vector<std::string>& args) {
-    (void)server;  // unused for now
+    (void)server;
 
     if (client->hasRegistered()) {
-        client->reply(462, "");
+        client->reply(462, " :Connection already registered");
         return;
     }
 

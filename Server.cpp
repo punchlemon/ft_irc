@@ -8,6 +8,7 @@
 #include "JoinCommand.hpp"
 #include "ModeCommand.hpp"
 #include "InviteCommand.hpp"
+#include "PartCommand.hpp"
 
 #include <iostream>
 #include <cstring>
@@ -61,6 +62,7 @@ void Server::_initCommands() {
     _commands["JOIN"] = new JoinCommand();
     _commands["MODE"] = new ModeCommand();
     _commands["INVITE"] = new InviteCommand();
+    _commands["PART"] = new PartCommand();
 }
 
 void Server::_cleanupCommands() {

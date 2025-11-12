@@ -11,10 +11,10 @@ bool PassCommand::requiresRegistration() const {
 }
 
 void PassCommand::execute(Server& server, Client* client, const std::vector<std::string>& args) {
-    (void)server;  // unused for now
+    (void)server;
 
     if (!client->getPassword().empty() || !client->getNickname().empty() || !client->getUsername().empty()) {
-        client->reply(462, "");
+        client->reply(462, " :Connection already registered");
         return;
     }
 

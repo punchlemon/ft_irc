@@ -28,10 +28,6 @@ const std::string& Client::getPassword() const {
 }
 
 const std::string& Client::getNickname() const {
-    if (_nickname.empty()) {
-        static const std::string emptyNick = "*";
-        return emptyNick;
-    }
     return _nickname;
 }
 
@@ -86,7 +82,8 @@ void Client::reply(int replyCode, const std::string& message) {
     if (!message.empty()) {
         msg = " " + message;
     }
-    std::string replyMsg = ":" + _server->getServerName() + " " + replyCodeStr + " " + getNickname() + msg;
+    std::string nickname = getNickname().empty() ? "*" : getNickname();
+    std::string replyMsg = ":" + _server->getServerName() + " " + replyCodeStr + " " + nickname + msg;
     switch (replyCode) {
         case 001: // RPL_WELCOME
             replyMsg += " :Welcome to the Internet Relay Server " + getPrefix();
@@ -105,9 +102,6 @@ void Client::reply(int replyCode, const std::string& message) {
             break;
         case 461: // ERR_NEEDMOREPARAMS
             replyMsg += " :Syntax error";
-            break;
-        case 462: // ERR_ALREADYREGISTERED
-            replyMsg += " :Connection already registered";
             break;
         case 471: // ERR_CHANNELISFULL
             replyMsg += " :Cannot join channel (+l) -- Channel is full, try later";
