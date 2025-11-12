@@ -9,6 +9,7 @@
 #include "ModeCommand.hpp"
 #include "InviteCommand.hpp"
 #include "PartCommand.hpp"
+#include "KickCommand.hpp"
 
 #include <iostream>
 #include <cstring>
@@ -63,6 +64,7 @@ void Server::_initCommands() {
     _commands["MODE"] = new ModeCommand();
     _commands["INVITE"] = new InviteCommand();
     _commands["PART"] = new PartCommand();
+    _commands["KICK"] = new KickCommand();
 }
 
 void Server::_cleanupCommands() {
@@ -296,6 +298,7 @@ void Server::_processCommand(int fd, const std::string& commandLine) {
         cmd->execute(*this, client, args);
         ///// これはいつか関数化して綺麗にする
         if (!client->hasRegistered() && !client->getNickname().empty() && !client->getUsername().empty()) {
+            
             if (client->getPassword() != this->getPassword()) {
                 client->queueMessage("ERROR :Access denied: Bad password?\r\n"); //// これを送信してからdisconnectする
                 std::cout << "[Socket " << fd << "] Client provided wrong password: " << client->getPrefix() << std::endl;

@@ -18,5 +18,11 @@ void NickCommand::execute(Server& server, Client* client, const std::vector<std:
         return;
     }
 
+    Client* existing = server.getClientByNickname(args[1]);
+    if (existing && existing != client) {
+        client->reply(433, args[1] + " :Nickname already in use");
+        return;
+    }
+
     client->setNickname(args[1]);
 }
