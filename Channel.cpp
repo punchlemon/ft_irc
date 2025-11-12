@@ -121,20 +121,17 @@ void Channel::removeInvite(int clientFd) {
     _inviteList.erase(clientFd);
 }
 
-bool Channel::canClientJoin(int clientFd, const std::string& key) const {
+Channel::JoinError Channel::canClientJoin(int clientFd, const std::string& key) const {
     if (hasMode('i') && !isInvited(clientFd)) {
-        return false;
+        return ERR_INVITEONLYCHAN;
     }
-
     if (hasMode('k') && key != _key) {
-        return false;
+        return ERR_BADCHANNELKEY;
     }
-
     if (hasMode('l') && _members.size() >= _userLimit) {
-        return false;
+        return ERR_CHANNELISFULL;
     }
-
-    return true;
+    return JOIN_SUCCESS;
 }
 
 bool Channel::hasMode(char mode) const {
@@ -237,4 +234,8 @@ std::string Channel::getMemberListString() const {
     }
 
     return oss.str();
+}
+
+const std::map<int, Client*>& Channel::getMembers() const {
+    return _members;
 }

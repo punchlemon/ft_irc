@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 class Server;
+class Channel;
 
 class Client {
 private:
@@ -18,6 +19,7 @@ private:
     std::string _hostname;
     bool _hasRegistered;
     std::set<char> _modes;
+    std::set<Channel*> _joinedChannels;
     Server* _server;
     uint32_t _epollEvents;
 
@@ -62,4 +64,9 @@ public:
 
     void addMode(char mode);
     void removeMode(char mode);
+
+    void addChannel(Channel* channel);
+    void removeChannel(Channel* channel);
+    const std::set<Channel*>& getJoinedChannels() const;
+    bool isInChannel(Channel* channel) const;
 };

@@ -1,9 +1,11 @@
 #include "Server.hpp"
 #include "Client.hpp"
+#include "Channel.hpp"
 #include "ICommand.hpp"
 #include "PassCommand.hpp"
 #include "NickCommand.hpp"
 #include "UserCommand.hpp"
+#include "JoinCommand.hpp"
 
 #include <iostream>
 #include <cstring>
@@ -44,12 +46,17 @@ Server::~Server() {
         close(it->first);
         delete it->second;
     }
+
+    for (std::map<std::string, Channel*>::iterator it = _channels.begin(); it != _channels.end(); ++it) {
+        delete it->second;
+    }
 }
 
 void Server::_initCommands() {
     _commands["PASS"] = new PassCommand();
     _commands["NICK"] = new NickCommand();
     _commands["USER"] = new UserCommand();
+    _commands["JOIN"] = new JoinCommand();
 }
 
 void Server::_cleanupCommands() {
@@ -222,11 +229,17 @@ void Server::_handleClientSend(int fd) {
 }
 
 void Server::_handleClientDisconnect(int fd) {
+    if (_clients.count(fd)) {
+        Client* client = _clients[fd];
+        removeClientFromAllChannels(client);
+    }
+
     if (_epollFd >= 0) {
         if (epoll_ctl(_epollFd, EPOLL_CTL_DEL, fd, NULL) < 0) {
             std::cerr << "epoll_ctl del failed for fd " << fd << std::endl;
         }
     }
+
     close(fd);
     if (_clients.count(fd)) {
         delete _clients[fd];
@@ -439,4 +452,105 @@ void Server::shutdown() {
     }
 
     std::cout << "Graceful shutdown complete." << std::endl;
+}
+
+Channel* Server::getChannel(const std::string& channelName) {
+    std::map<std::string, Channel*>::iterator it = _channels.find(channelName);
+    if (it != _channels.end()) {
+        return it->second;
+    }
+    return NULL;
+}
+
+Channel* Server::getOrCreateChannel(const std::string& channelName) {
+    std::map<std::string, Channel*>::iterator it = _channels.find(channelName);
+    if (it != _channels.end()) {
+        return it->second;
+    }
+
+    // Create new channel
+    Channel* newChannel = new Channel(channelName);
+    _channels[channelName] = newChannel;
+    std::cout << "Created new channel: " << channelName << std::endl;
+    return newChannel;
+}
+
+void Server::removeChannel(const std::string& channelName) {
+    std::map<std::string, Channel*>::iterator it = _channels.find(channelName);
+    if (it == _channels.end()) {
+        return;
+    }
+    Channel* channel = it->second;
+    const std::map<int, Client*>& members = channel->getMembers();
+    std::vector<Client*> membersCopy;
+    for (std::map<int, Client*>::const_iterator mit = members.begin();
+         mit != members.end(); ++mit) {
+        if (mit->second) {
+            membersCopy.push_back(mit->second);
+        }
+    }
+
+    for (std::vector<Client*>::iterator cit = membersCopy.begin();
+         cit != membersCopy.end(); ++cit) {
+        Client* client = *cit;
+        if (client) {
+            client->removeChannel(channel);
+        }
+    }
+
+    delete channel;
+    _channels.erase(it);
+    std::cout << "Removed channel: " << channelName << std::endl;
+}
+
+Client* Server::getClientByFd(int fd) {
+    std::map<int, Client*>::iterator it = _clients.find(fd);
+    if (it != _clients.end()) {
+        return it->second;
+    }
+    return NULL;
+}
+
+void Server::addClientToChannel(Client* client, Channel* channel) {
+    if (!client || !channel) return;
+
+    channel->addClient(client);
+    client->addChannel(channel);
+
+    std::cout << "[" << client->getNickname() << "] joined channel " << channel->getName() << std::endl;
+}
+
+void Server::removeClientFromChannel(Client* client, Channel* channel) {
+    if (!client || !channel) return;
+
+    const std::string& channelName = channel->getName();
+
+    channel->removeClient(client);
+    client->removeChannel(channel);
+
+    std::cout << "[" << client->getNickname() << "] left channel " << channelName << std::endl;
+
+    if (channel->getMemberCount() == 0) {
+        removeChannel(channelName);
+    }
+}
+
+void Server::removeClientFromAllChannels(Client* client) {
+    if (!client) return;
+
+    const std::set<Channel*>& joinedChannels = client->getJoinedChannels();
+
+    std::set<Channel*> channelsCopy = joinedChannels;
+
+    for (std::set<Channel*>::iterator it = channelsCopy.begin();
+         it != channelsCopy.end(); ++it) {
+        Channel* channel = *it;
+        if (channel) {
+            // Broadcast QUIT message to channel members before removing
+            std::string quitMsg = ":" + client->getPrefix() + " QUIT :Client disconnected\r\n";
+            channel->broadcast(quitMsg, client->getFd());
+
+            removeClientFromChannel(client, channel);
+        }
+    }
 }

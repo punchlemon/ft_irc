@@ -8,6 +8,13 @@ class Client;
 
 class Channel {
 public:
+    enum JoinError {
+        JOIN_SUCCESS = 0,
+        ERR_INVITEONLYCHAN = 473,
+        ERR_BADCHANNELKEY = 475,
+        ERR_CHANNELISFULL = 471
+    };
+
     explicit Channel(const std::string& name);
     ~Channel();
 
@@ -36,7 +43,7 @@ public:
     bool isInvited(int clientFd) const;
     void removeInvite(int clientFd);
 
-    bool canClientJoin(int clientFd, const std::string& key) const;
+    JoinError canClientJoin(int clientFd, const std::string& key) const;
 
     bool hasMode(char mode) const;
     void addMode(char mode);
@@ -53,6 +60,8 @@ public:
 
     std::vector<std::string> getMemberList() const;
     std::string getMemberListString() const;
+
+    const std::map<int, Client*>& getMembers() const;
 
 private:
     Channel();
