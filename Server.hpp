@@ -59,4 +59,5 @@ private:
     void _handleClientSend(int fd);
     void _handleClientDisconnect(int fd);
     void _processCommand(int fd, const std::string& commandLine);
+    std::vector<std::string> _splitArgs(const std::string& commandLine);
 };

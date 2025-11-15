@@ -221,6 +221,37 @@ std::string visualizeCRLF(const std::string& input) {
     return oss.str();
 }
 
+// Helper: split a raw command line into whitespace-separated arguments
+std::vector<std::string> Server::_splitArgs(const std::string& commandLine) {
+    std::vector<std::string> args;
+    size_t i = 0;
+    const size_t n = commandLine.size();
+
+    // skip leading whitespace
+    while (i < n && isspace((unsigned char)commandLine[i])) ++i;
+
+    while (i < n) {
+        // If token starts with ':', everything after ':' is one trailing parameter
+        if (commandLine[i] == ':') {
+            std::string trailing;
+            if (i + 1 < n) trailing = commandLine.substr(i + 1);
+            else trailing = "";
+            args.push_back(trailing);
+            break;
+        }
+
+        // Read next token until whitespace
+        size_t start = i;
+        while (i < n && !isspace((unsigned char)commandLine[i])) ++i;
+        args.push_back(commandLine.substr(start, i - start));
+
+        // Skip spaces to next token
+        while (i < n && isspace((unsigned char)commandLine[i])) ++i;
+    }
+
+    return args;
+}
+
 void Server::_handleClientRecv(int fd) {
     if (!_clients.count(fd)) return;
     Client* client = _clients[fd];
@@ -284,25 +315,90 @@ void Server::_handleClientSend(int fd) {
 }
 
 void Server::_handleClientDisconnect(int fd) {
-    if (_clients.count(fd)) {
-        Client* client = _clients[fd];
-        removeClientFromAllChannels(client);
+    {
+        std::ostringstream _entry;
+        _entry << "_handleClientDisconnect called for fd=" << fd << " (clients=" << _clients.size() << ")";
+        ngircd_log("debug", _entry.str());
+    }
+
+    if (!_clients.count(fd)) {
+        std::ostringstream _oss;
+        _oss << "_handleClientDisconnect: fd=" << fd << " not found in _clients map, ensuring close()";
+        ngircd_log("debug", _oss.str());
+        close(fd);
+        return;
+    }
+
+    Client* client = _clients[fd];
+    {
+        std::ostringstream _info;
+        _info << "Disconnecting client fd=" << fd << " nick='" << client->getNickname() << "' prefix='" << client->getPrefix() << "'";
+        ngircd_log("info", _info.str());
+    }
+
+    // Show how many channels the client is in before removal
+    {
+        std::ostringstream _chcount;
+        _chcount << "Client fd=" << fd << " is in " << client->getJoinedChannels().size() << " channel(s) before removal";
+        ngircd_log("debug", _chcount.str());
+    }
+
+    removeClientFromAllChannels(client);
+
+    {
+        std::ostringstream _after;
+        _after << "After removeClientFromAllChannels: client fd=" << fd << " joinedChannels=" << client->getJoinedChannels().size();
+        ngircd_log("debug", _after.str());
     }
 
     if (_epollFd >= 0) {
+        std::ostringstream _oss_try;
+        _oss_try << "Attempting epoll_ctl(DEL) for fd=" << fd << " on epoll_fd=" << _epollFd;
+        ngircd_log("debug", _oss_try.str());
+
         if (epoll_ctl(_epollFd, EPOLL_CTL_DEL, fd, NULL) < 0) {
-            {
+            int err = errno;
+            // Ignore benign errors: invalid fd or already removed
+            if (err != EBADF && err != EINVAL) {
                 std::ostringstream oss;
-                oss << "epoll_ctl del failed for fd " << fd;
+                oss << "epoll_ctl del failed for fd " << fd << ": " << std::strerror(err);
                 ngircd_log("error", oss.str());
+            } else {
+                std::ostringstream oss_ignore;
+                oss_ignore << "epoll_ctl del for fd=" << fd << " returned benign errno=" << err << " (" << std::strerror(err) << ") - ignoring";
+                ngircd_log("debug", oss_ignore.str());
             }
+        } else {
+            std::ostringstream oss_ok;
+            oss_ok << "epoll_ctl(DEL) succeeded for fd=" << fd;
+            ngircd_log("debug", oss_ok.str());
         }
     }
 
+    {
+        std::ostringstream _closemsg;
+        _closemsg << "Closing socket fd=" << fd;
+        ngircd_log("debug", _closemsg.str());
+    }
     close(fd);
-    if (_clients.count(fd)) {
-        delete _clients[fd];
-        _clients.erase(fd);
+    {
+        std::ostringstream _closed;
+        _closed << "Socket fd=" << fd << " closed";
+        ngircd_log("debug", _closed.str());
+    }
+
+    {
+        std::ostringstream _del;
+        _del << "Deleting client object for fd=" << fd << " nick='" << client->getNickname() << "'";
+        ngircd_log("debug", _del.str());
+    }
+    delete client;
+    _clients.erase(fd);
+
+    {
+        std::ostringstream _remaining;
+        _remaining << "Client removed. remaining clients=" << _clients.size();
+        ngircd_log("info", _remaining.str());
     }
 }
 
@@ -313,20 +409,59 @@ void Server::_processCommand(int fd, const std::string& commandLine) {
         _logoss << "Command from fd=" << fd << " : [" << visualizeCRLF(commandLine) << "]";
         ngircd_log("info", _logoss.str());
     }
+
+    // Parse command token first (commands must come first and must not start with ':')
+    size_t pos = 0;
+    const size_t n = commandLine.size();
+    // skip leading whitespace
+    while (pos < n && isspace((unsigned char)commandLine[pos])) ++pos;
+
+    size_t cmd_start = pos;
+    while (pos < n && !isspace((unsigned char)commandLine[pos])) ++pos;
+
+    if (cmd_start == pos) {
+        {
+            std::ostringstream _oss;
+            _oss << fd;
+            ngircd_log("debug", std::string("Empty command received from fd=") + _oss.str());
+        }
+        return;
+    }
+
+    std::string cmdToken = commandLine.substr(cmd_start, pos - cmd_start);
+    if (!cmdToken.empty() && cmdToken[0] == ':') {
+        // Command beginning with ':' is invalid in this server's parsing expectations
+        {
+            std::ostringstream oss;
+            oss << "Malformed command (starts with ':') from fd=" << fd << ": " << cmdToken;
+            ngircd_log("info", oss.str());
+        }
+        return;
+    }
+
+    // Build args: first element is the command token, remaining are parsed from the rest of the line
     std::vector<std::string> args;
-    std::istringstream iss(commandLine);
-    std::string token;
-    while (iss >> token) {
-        args.push_back(token);
+    args.push_back(cmdToken);
+
+    // remainder (may include leading spaces) and let _splitArgs handle trailing ':' semantics
+    std::string remainder;
+    if (pos < n) remainder = commandLine.substr(pos);
+    if (!remainder.empty()) {
+        std::vector<std::string> more = _splitArgs(remainder);
+        for (size_t i = 0; i < more.size(); ++i) args.push_back(more[i]);
     }
 
     if (args.empty()) {
-        ngircd_log("debug", std::string("Empty command received from fd=") + (std::ostringstream() << fd, ""));
+        std::ostringstream _oss2;
+        _oss2 << fd;
+        ngircd_log("debug", std::string("Empty command received from fd=") + _oss2.str());
         return;
     }
 
     if (!_clients.count(fd)) {
-        ngircd_log("warning", std::string("Client not found in _processCommand for fd=") + (std::ostringstream() << fd, ""));
+        std::ostringstream _oss3;
+        _oss3 << fd;
+        ngircd_log("warning", std::string("Client not found in _processCommand for fd=") + _oss3.str());
         return;
     }
 
@@ -507,6 +642,8 @@ void Server::shutdown() {
             oss << "Closing server socket (fd=" << _serverFd << ")";
             ngircd_log("info", oss.str());
         }
+        // actually close the listening socket
+        close(_serverFd);
         _serverFd = -1;
     }
 
@@ -540,6 +677,7 @@ void Server::shutdown() {
             oss << "Closing epoll instance (fd=" << _epollFd << ")";
             ngircd_log("info", oss.str());
         }
+        close(_epollFd);
         _epollFd = -1;
     }
 
