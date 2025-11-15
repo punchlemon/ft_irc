@@ -25,8 +25,24 @@
 #include <sys/epoll.h>
 #include <sstream>
 #include <signal.h>
+#include <ctime>
+#include <cstdio>
 
 extern volatile sig_atomic_t g_shutdown_requested;
+
+// Simple ngircd-like logger compatible with C++98
+static void ngircd_log(const std::string& level, const std::string& msg) {
+    time_t t = time(NULL);
+    struct tm* tm_info = localtime(&t);
+    char timebuf[64];
+    if (tm_info) {
+        strftime(timebuf, sizeof(timebuf), "%b %d %H:%M:%S", tm_info);
+    } else {
+        std::strncpy(timebuf, "0000-00-00 00:00:00", sizeof(timebuf));
+        timebuf[sizeof(timebuf)-1] = '\0';
+    }
+    std::cout << "[" << timebuf << "] : " << level << ": " << msg << std::endl;
+}
 
 #define BACKLOG 10
 #define BUFFER_SIZE 512
@@ -121,7 +137,11 @@ void Server::_initServer() {
 
     _events.resize(1024);
 
-    std::cout << "Server started on port " << _port << std::endl;
+    {
+        std::ostringstream oss;
+        oss << "Server started on port " << _port;
+        ngircd_log("info", oss.str());
+    }
 }
 
 const std::string Server::_generateTimeString(time_t startTime) const {
@@ -145,18 +165,26 @@ void Server::_handleNewConnection() {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 break;
             }
-            std::cerr << "accept error" << std::endl;
+            ngircd_log("error", "accept error");
             break;
         }
 
         if (fcntl(new_socket, F_SETFL, O_NONBLOCK) < 0) {
-            std::cerr << "[Socket " << new_socket << "] fcntl() error" << std::endl;
+            {
+                std::ostringstream oss;
+                oss << "[Socket " << new_socket << "] fcntl() error";
+                ngircd_log("error", oss.str());
+            }
             close(new_socket);
             continue;
         }
 
         std::string hostname = inet_ntoa(client_addr.sin_addr);
-        std::cout << "[Socket " << new_socket << "] New connection from " << hostname << std::endl;
+        {
+            std::ostringstream oss;
+            oss << "New connection from " << hostname << " (fd=" << new_socket << ")";
+            ngircd_log("info", oss.str());
+        }
 
         Client* new_client = new Client(new_socket, hostname, this, EPOLLIN);
         _clients[new_socket] = new_client;
@@ -165,7 +193,11 @@ void Server::_handleNewConnection() {
         ev.events = EPOLLIN;
         ev.data.fd = new_socket;
         if (epoll_ctl(_epollFd, EPOLL_CTL_ADD, new_socket, &ev) < 0) {
-            std::cerr << "epoll_ctl add client failed for fd " << new_socket << std::endl;
+            {
+                std::ostringstream oss;
+                oss << "epoll_ctl add client failed for fd " << new_socket;
+                ngircd_log("error", oss.str());
+            }
             close(new_socket);
             delete new_client;
             _clients.erase(new_socket);
@@ -190,7 +222,6 @@ std::string visualizeCRLF(const std::string& input) {
 }
 
 void Server::_handleClientRecv(int fd) {
-    std::cout << "[Socket " << fd << "] Handling client data" << std::endl;
     if (!_clients.count(fd)) return;
     Client* client = _clients[fd];
 
@@ -202,12 +233,20 @@ void Server::_handleClientRecv(int fd) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 break;
             }
-            std::cerr << "[Socket " << fd << "] recv error" << std::endl;
+            {
+                std::ostringstream oss;
+                oss << "[Socket " << fd << "] recv error";
+                ngircd_log("error", oss.str());
+            }
             _handleClientDisconnect(fd);
             return;
         }
         if (bytes_read == 0) {
-            std::cout << "[Socket " << fd << "] Client disconnected (read 0)." << std::endl;
+            {
+                std::ostringstream oss;
+                oss << "Client disconnected (fd=" << fd << ")";
+                ngircd_log("info", oss.str());
+            }
             _handleClientDisconnect(fd);
             return;
         }
@@ -229,7 +268,11 @@ void Server::_handleClientSend(int fd) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             return;
         }
-        std::cerr << "[Socket " << fd << "] send error" << std::endl;
+        {
+            std::ostringstream oss;
+            oss << "[Socket " << fd << "] send error";
+            ngircd_log("error", oss.str());
+        }
         _handleClientDisconnect(fd);
         return;
     }
@@ -248,7 +291,11 @@ void Server::_handleClientDisconnect(int fd) {
 
     if (_epollFd >= 0) {
         if (epoll_ctl(_epollFd, EPOLL_CTL_DEL, fd, NULL) < 0) {
-            std::cerr << "epoll_ctl del failed for fd " << fd << std::endl;
+            {
+                std::ostringstream oss;
+                oss << "epoll_ctl del failed for fd " << fd;
+                ngircd_log("error", oss.str());
+            }
         }
     }
 
@@ -260,6 +307,12 @@ void Server::_handleClientDisconnect(int fd) {
 }
 
 void Server::_processCommand(int fd, const std::string& commandLine) {
+    // Log the raw command line received from client (make CR/LF visible)
+    {
+        std::ostringstream _logoss;
+        _logoss << "Command from fd=" << fd << " : [" << visualizeCRLF(commandLine) << "]";
+        ngircd_log("info", _logoss.str());
+    }
     std::vector<std::string> args;
     std::istringstream iss(commandLine);
     std::string token;
@@ -268,12 +321,12 @@ void Server::_processCommand(int fd, const std::string& commandLine) {
     }
 
     if (args.empty()) {
-        std::cerr << "[Socket " << fd << "] Empty command received" << std::endl;
+        ngircd_log("debug", std::string("Empty command received from fd=") + (std::ostringstream() << fd, ""));
         return;
     }
 
     if (!_clients.count(fd)) {
-        std::cerr << "[Socket " << fd << "] Client not found in _processCommand" << std::endl;
+        ngircd_log("warning", std::string("Client not found in _processCommand for fd=") + (std::ostringstream() << fd, ""));
         return;
     }
 
@@ -285,7 +338,11 @@ void Server::_processCommand(int fd, const std::string& commandLine) {
     }
 
     if (_commands.count(cmdName) == 0) {
-        std::cout << "[Socket " << fd << "] Unknown command: " << args[0] << std::endl;
+        {
+            std::ostringstream oss;
+            oss << "Unknown command from fd=" << fd << ": " << args[0];
+            ngircd_log("info", oss.str());
+        }
         if (client->hasRegistered()) {
             client->reply(421, args[0]);
         }
@@ -302,15 +359,22 @@ void Server::_processCommand(int fd, const std::string& commandLine) {
         cmd->execute(*this, client, args);
         ///// これはいつか関数化して綺麗にする
         if (!client->hasRegistered() && !client->getNickname().empty() && !client->getUsername().empty()) {
-            
             if (client->getPassword() != this->getPassword()) {
                 client->queueMessage("ERROR :Access denied: Bad password?\r\n"); //// これを送信してからdisconnectする
-                std::cout << "[Socket " << fd << "] Client provided wrong password: " << client->getPrefix() << std::endl;
+                {
+                    std::ostringstream oss;
+                    oss << "Client provided wrong password: " << client->getPrefix();
+                    ngircd_log("warning", oss.str());
+                }
                 _handleClientDisconnect(fd);
                 return;
             }
             client->setHasRegistered(true);
-            std::cout << "[Socket " << fd << "] Client registered: " << client->getPrefix() << std::endl;
+            {
+                std::ostringstream oss;
+                oss << "Client registered: " << client->getPrefix();
+                ngircd_log("info", oss.str());
+            }
             client->reply(001, "");
             client->reply(002, "");
             client->reply(003, "");
@@ -328,7 +392,7 @@ void Server::run() {
     while (true) {
         // Check for shutdown signal
         if (g_shutdown_requested) {
-            std::cout << "\nShutdown signal received, cleaning up..." << std::endl;
+            ngircd_log("info", "Shutdown signal received, cleaning up...");
             shutdown();
             break;
         }
@@ -336,7 +400,11 @@ void Server::run() {
         int n = epoll_wait(_epollFd, _events.data(), _events.size(), EPOLL_TIMEOUT_MS);
         if (n < 0) {
             if (errno == EINTR) continue; // interrupted by signal, retry
-            std::cerr << "epoll_wait error: " << std::strerror(errno) << std::endl;
+            {
+                std::ostringstream oss;
+                oss << "epoll_wait error: " << std::strerror(errno);
+                ngircd_log("error", oss.str());
+            }
             continue;
         }
         if (n == 0) {
@@ -430,17 +498,25 @@ const std::string Server::getStartTimeString() const {
 }
 
 void Server::shutdown() {
-    std::cout << "Starting graceful shutdown..." << std::endl;
+    ngircd_log("info", "Starting graceful shutdown...");
 
     // 1. Stop accepting new connections - close server socket first
     if (_serverFd >= 0) {
-        std::cout << "Closing server socket (fd=" << _serverFd << ")" << std::endl;
-        close(_serverFd);
+        {
+            std::ostringstream oss;
+            oss << "Closing server socket (fd=" << _serverFd << ")";
+            ngircd_log("info", oss.str());
+        }
         _serverFd = -1;
     }
 
     // 2. Notify all clients about shutdown and close their connections
-    std::cout << "Disconnecting " << _clients.size() << " client(s)..." << std::endl;
+    {
+        std::ostringstream oss;
+        oss << "Disconnecting " << _clients.size() << " client(s)...";
+        ngircd_log("info", oss.str());
+    }
+
     for (std::map<int, Client*>::iterator it = _clients.begin(); it != _clients.end(); ++it) {
         int client_fd = it->first;
         Client* client = it->second;
@@ -459,12 +535,15 @@ void Server::shutdown() {
 
     // 3. Close epoll instance
     if (_epollFd >= 0) {
-        std::cout << "Closing epoll instance (fd=" << _epollFd << ")" << std::endl;
-        close(_epollFd);
+        {
+            std::ostringstream oss;
+            oss << "Closing epoll instance (fd=" << _epollFd << ")";
+            ngircd_log("info", oss.str());
+        }
         _epollFd = -1;
     }
 
-    std::cout << "Graceful shutdown complete." << std::endl;
+    ngircd_log("info", "Graceful shutdown complete.");
 }
 
 Channel* Server::getChannel(const std::string& channelName) {
@@ -484,7 +563,7 @@ Channel* Server::getOrCreateChannel(const std::string& channelName) {
     // Create new channel
     Channel* newChannel = new Channel(channelName);
     _channels[channelName] = newChannel;
-    std::cout << "Created new channel: " << channelName << std::endl;
+    ngircd_log("info", std::string("Created new channel: ") + channelName);
     return newChannel;
 }
 
@@ -513,7 +592,7 @@ void Server::removeChannel(const std::string& channelName) {
 
     delete channel;
     _channels.erase(it);
-    std::cout << "Removed channel: " << channelName << std::endl;
+    ngircd_log("info", std::string("Removed channel: ") + channelName);
 }
 
 Client* Server::getClientByFd(int fd) {
@@ -539,7 +618,7 @@ void Server::addClientToChannel(Client* client, Channel* channel) {
     channel->addClient(client);
     client->addChannel(channel);
 
-    std::cout << "[" << client->getNickname() << "] joined channel " << channel->getName() << std::endl;
+    ngircd_log("info", std::string("[") + client->getNickname() + "] joined channel " + channel->getName());
 }
 
 void Server::removeClientFromChannel(Client* client, Channel* channel) {
@@ -550,7 +629,7 @@ void Server::removeClientFromChannel(Client* client, Channel* channel) {
     channel->removeClient(client);
     client->removeChannel(channel);
 
-    std::cout << "[" << client->getNickname() << "] left channel " << channelName << std::endl;
+    ngircd_log("info", std::string("[") + client->getNickname() + "] left channel " + channelName);
 
     if (channel->getMemberCount() == 0) {
         removeChannel(channelName);
@@ -571,6 +650,7 @@ void Server::removeClientFromAllChannels(Client* client) {
             // Broadcast QUIT message to channel members before removing
             std::string quitMsg = ":" + client->getPrefix() + " QUIT :Client disconnected\r\n";
             channel->broadcast(quitMsg, client->getFd());
+            ngircd_log("info", std::string("Client quit on channel ") + channel->getName() + ": " + client->getPrefix());
 
             removeClientFromChannel(client, channel);
         }
