@@ -66,7 +66,8 @@ void JoinCommand::_joinSingleChannel(Server& server, Client* client, const std::
         return;
     }
 
-    channel->addClient(client);
+    // Use server helper so both channel and client internal state are updated
+    server.addClientToChannel(client, channel);
 
     if (channel->isInvited(clientFd)) {
         channel->removeInvite(clientFd);
