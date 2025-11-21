@@ -17,14 +17,13 @@ read -p "準備ができたら Enter を押してください..."
     printf "PASS password\r\n"
     printf "NICK %s\r\n" "$FLOOD_NICK"
     printf "USER flood 0 * :Flood Bot\r\n"
-    sleep 2
     printf "JOIN %s\r\n" "$CHANNEL_NAME"
-    sleep 1
 
     # Bash の算術ループで効率的に回す
     for ((i=1; i<=MESSAGE_COUNT; ++i)); do
         printf "PRIVMSG %s :%d: FLOOD TEST MESSAGE\r\n" "$CHANNEL_NAME" "$i"
     done
-    sleep 1
+
+    sleep 10
 
 ) | nc -N $IRC_HOST $IRC_PORT
